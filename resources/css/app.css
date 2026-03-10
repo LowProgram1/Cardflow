@@ -1,0 +1,29 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+@source '../**/*.jsx';
+
+@theme {
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+    /* Only three colors: Primary, Secondary, Neutral */
+    --color-primary: #2563EB;
+    --color-secondary: #1E3A8A;
+    --color-neutral: #F3F4F6;
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--color-neutral);
+    color: var(--color-secondary);
+}
+
+/* Table row hover highlight */
+.app-data-table table tbody tr {
+    transition: background-color 0.15s ease;
+}
+.app-data-table table tbody tr:hover {
+    background-color: #eff6ff;
+}

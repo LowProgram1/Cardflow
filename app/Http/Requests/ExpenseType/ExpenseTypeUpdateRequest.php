@@ -1,0 +1,28 @@
+<?php
+
+namespace App\Http\Requests\ExpenseType;
+
+use App\Http\Requests\Concerns\FlashOpenModalOnValidationFailure;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class ExpenseTypeUpdateRequest extends FormRequest
+{
+    use FlashOpenModalOnValidationFailure;
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('expense_types', 'name')->ignore($this->route('expense_type')),
+            ],
+        ];
+    }
+}
