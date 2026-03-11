@@ -27,7 +27,11 @@ class ExpenseController extends Controller
 
     public function index(): InertiaResponse
     {
-        $result = $this->expenses->paginateWithRelations(15);
+        $user = auth()->user();
+        $isAdmin = ($user->role ?? 'admin') === 'admin';
+        $userId = $isAdmin ? null : $user->id;
+
+        $result = $this->expenses->paginateWithRelations(15, $userId);
 
         $items = collect($result->items())->map(function (Expense $expense) {
             $isInstallment = ($expense->payment_type ?? 'full') === 'installment' && $expense->monthly_amortization;
@@ -57,7 +61,7 @@ class ExpenseController extends Controller
             ];
         });
 
-        $cardOptions = $this->cards->allActive()->map(function (Card $card) {
+        $cardOptions = $this->cards->allActive($userId)->map(function (Card $card) {
             $typeName = $card->cardType?->name ?? 'Card';
             return [
                 'id' => $card->id,
@@ -65,12 +69,15 @@ class ExpenseController extends Controller
             ];
         });
 
-        $users = User::query()->orderBy('name')->get(['id', 'name'])->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]);
+        $users = $isAdmin
+            ? User::query()->orderBy('name')->get(['id', 'name'])->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])
+            : [['id' => $user->id, 'name' => $user->name]];
 
         return $this->inertia('Expenses/Index', [
             'expenses' => $items,
             'cardOptions' => $cardOptions,
             'users' => $users,
+            'isAdmin' => $isAdmin,
             'expenseTypes' => ExpenseType::query()->orderBy('name')->get(['id', 'name']),
             'paymentTerms' => PaymentTerm::query()->orderBy('months')->get(['id', 'months']),
             'pagination' => [
@@ -85,7 +92,12 @@ class ExpenseController extends Controller
     public function store(ExpenseStoreRequest $request): RedirectResponse
     {
         $data = $request->validated();
-        $data['user_id'] = (int) $data['user_id'];
+        $user = auth()->user();
+        if (($user->role ?? 'admin') !== 'admin') {
+            $data['user_id'] = $user->id;
+        } else {
+            $data['user_id'] = (int) ($data['user_id'] ?? $user->id);
+        }
         $data['type'] = $data['type'] ?? 'expense';
 
         if (($data['payment_type'] ?? 'full') === 'installment' && ! empty($data['payment_term_id']) && ! empty($data['monthly_amortization'])) {
@@ -105,7 +117,16 @@ class ExpenseController extends Controller
 
     public function update(ExpenseUpdateRequest $request, Expense $expense): RedirectResponse
     {
+        $user = auth()->user();
+        if (($user->role ?? 'admin') !== 'admin' && $expense->user_id != $user->id) {
+            abort(403, 'You can only edit your own expenses.');
+        }
         $data = $request->validated();
+        if (($user->role ?? 'admin') !== 'admin') {
+            $data['user_id'] = $user->id;
+        } else {
+            $data['user_id'] = (int) ($data['user_id'] ?? $expense->user_id);
+        }
         $data['type'] = $data['type'] ?? $expense->type ?? 'expense';
 
         if (($data['payment_type'] ?? 'full') === 'installment' && ! empty($data['payment_term_id']) && ! empty($data['monthly_amortization'])) {
@@ -135,6 +156,10 @@ class ExpenseController extends Controller
 
     public function destroy(Expense $expense): RedirectResponse
     {
+        $user = auth()->user();
+        if (($user->role ?? 'admin') !== 'admin' && $expense->user_id != $user->id) {
+            abort(403, 'You can only delete your own expenses.');
+        }
         $this->expenses->delete($expense);
 
         return redirect()->route('expenses.index')->with('flash', [
@@ -145,6 +170,10 @@ class ExpenseController extends Controller
 
     public function togglePaidMonth(Request $request, Expense $expense): RedirectResponse|JsonResponse
     {
+        $user = auth()->user();
+        if (($user->role ?? 'admin') !== 'admin' && $expense->user_id != $user->id) {
+            abort(403, 'You can only update your own expense payments.');
+        }
         $request->validate(['month' => ['required', 'integer', 'min:1', 'max:120']]);
         $month = (int) $request->input('month');
 
@@ -187,10 +216,16 @@ class ExpenseController extends Controller
         $amounts = $expense->paid_month_amounts ?? [];
         if (empty($amounts) && ! empty($expense->paid_months)) {
             foreach ($expense->paid_months as $m) {
-                $amounts[$m] = (float) $expense->monthly_amortization;
+                $amounts[(int) $m] = (float) $expense->monthly_amortization;
             }
         }
-        $paidMonths = array_keys($amounts);
+        // Normalize to integer keys and float values
+        $amounts = array_map(
+            fn ($v) => round((float) $v, 2),
+            array_combine(array_map('intval', array_keys($amounts)), array_values($amounts))
+        );
+        $amounts = array_filter($amounts, fn ($v) => $v > 0);
+        $paidMonths = array_values(array_keys($amounts));
         sort($paidMonths);
 
         if (in_array($month, $paidMonths, true)) {
@@ -226,14 +261,16 @@ class ExpenseController extends Controller
             }
         }
 
-        $monthly = (float) $expense->monthly_amortization;
+        $monthly = round((float) $expense->monthly_amortization, 2);
         $carry = 0.0;
         for ($m = 1; $m < $month; $m++) {
-            $amountRequired = max(0.0, $monthly - $carry);
-            $paid = isset($amounts[$m]) ? (float) $amounts[$m] : 0.0;
-            $carry += max(0.0, $paid - $amountRequired);
+            $amountRequired = round(max(0.0, $monthly - $carry), 2);
+            $paid = isset($amounts[$m]) ? $amounts[$m] : 0.0;
+            $consumed = $monthly - $amountRequired;
+            $overpayment = max(0.0, $paid - $amountRequired);
+            $carry = round($carry - $consumed + $overpayment, 2);
         }
-        $amountRequired = max(0.0, $monthly - $carry);
+        $amountRequired = round(max(0.0, $monthly - $carry), 2);
 
         $amountPaid = $request->input('amount_paid');
         if ($amountPaid === null || $amountPaid === '') {
@@ -290,22 +327,30 @@ class ExpenseController extends Controller
         if (($expense->payment_type ?? 'full') !== 'installment' || ! $expense->paymentTerm) {
             return [];
         }
-        $monthly = (float) $expense->monthly_amortization;
-        $term = $expense->paymentTerm->months;
+        $monthly = round((float) $expense->monthly_amortization, 2);
+        $term = (int) $expense->paymentTerm->months;
         $amounts = $expense->paid_month_amounts ?? [];
-        $requirements = [];
-        $carry = 0.0;
+        // Normalize to integer keys and float values (JSON may have string keys)
+        $amounts = array_map(
+            fn ($v) => round((float) $v, 2),
+            array_combine(array_map('intval', array_keys($amounts)), array_values($amounts))
+        );
+        $amounts = array_filter($amounts, fn ($v) => $v > 0);
         if (empty($amounts) && ! empty($expense->paid_months)) {
             foreach ($expense->paid_months as $m) {
-                $amounts[$m] = $expense->monthly_amortization;
+                $amounts[(int) $m] = $monthly;
             }
         }
+        $requirements = [];
+        $carry = 0.0;
         for ($m = 1; $m <= $term; $m++) {
-            $amountRequired = max(0.0, $monthly - $carry);
-            $key = $m;
-            $amountPaid = isset($amounts[$key]) ? (float) $amounts[$key] : null;
+            $amountRequired = round(max(0.0, $monthly - $carry), 2);
+            $amountPaid = isset($amounts[$m]) ? $amounts[$m] : null;
             if ($amountPaid !== null) {
-                $carry += max(0.0, $amountPaid - $amountRequired);
+                // Consume carry used to reduce this month's due, then add this month's overpayment
+                $consumed = $monthly - $amountRequired;
+                $overpayment = max(0.0, $amountPaid - $amountRequired);
+                $carry = round($carry - $consumed + $overpayment, 2);
             }
             $requirements[] = [
                 'month' => $m,

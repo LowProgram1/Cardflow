@@ -5,6 +5,8 @@ import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { FormField } from '../../components/ui/FormField';
 import { FormValidationSummary } from '../../components/ui/FormValidationSummary';
 import { PasswordInput } from '../../components/ui/PasswordInput';
+import { PasswordStrengthIndicator } from '../../components/ui/PasswordStrengthIndicator';
+import { PasswordConfirmationHint } from '../../components/ui/PasswordConfirmationHint';
 import { AppDataTable } from '../../components/ui/DataTable';
 import { useForm, usePage, router } from '@inertiajs/react';
 
@@ -13,6 +15,7 @@ function UserForm({ initialData, onClose, isEdit }) {
         name: initialData?.name ?? '',
         email: initialData?.email ?? '',
         password: '',
+        password_confirmation: '',
         role: initialData?.role ?? 'admin',
     });
 
@@ -24,7 +27,7 @@ function UserForm({ initialData, onClose, isEdit }) {
         method(route, {
             preserveScroll: true,
             onSuccess: () => {
-                reset('password');
+                reset('password', 'password_confirmation');
                 onClose();
             },
         });
@@ -52,8 +55,18 @@ function UserForm({ initialData, onClose, isEdit }) {
                     className={`w-full rounded-lg border px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 ${errors.password ? 'border-red-500 bg-red-50/50 focus:ring-red-500' : 'border-[#1E3A8A]/20 bg-[#F3F4F6] focus:ring-[#2563EB]'}`}
                     value={data.password}
                     onChange={(e) => setData('password', e.target.value)}
+                    placeholder={isEdit ? 'Leave blank to keep current password' : 'Min 10 chars, upper & lower case, number, symbol'}
+                />
+                <PasswordStrengthIndicator password={data.password} showOnlyWhenFilled />
+            </FormField>
+            <FormField label="Confirm password" name="password_confirmation" error={errors.password_confirmation} required={!isEdit}>
+                <PasswordInput
+                    className={`w-full rounded-lg border px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 ${errors.password_confirmation ? 'border-red-500 bg-red-50/50 focus:ring-red-500' : 'border-[#1E3A8A]/20 bg-[#F3F4F6] focus:ring-[#2563EB]'}`}
+                    value={data.password_confirmation}
+                    onChange={(e) => setData('password_confirmation', e.target.value)}
                     placeholder={isEdit ? 'Leave blank to keep current password' : ''}
                 />
+                <PasswordConfirmationHint password={data.password} confirmation={data.password_confirmation} />
             </FormField>
             <FormField label="Role" name="role" error={errors.role} required>
                 <select

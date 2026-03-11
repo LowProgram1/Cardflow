@@ -25,7 +25,7 @@ function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
     const [amountPaid, setAmountPaid] = useState('');
     const [unpayConfirmMonth, setUnpayConfirmMonth] = useState(null);
 
-    const reqForMonth = (m) => monthRequirements.find((r) => r.month === m);
+    const reqForMonth = (m) => monthRequirements.find((r) => Number(r.month) === Number(m));
     const isPaid = (m) => paidMonths.includes(m);
     const canPayMonth = (m) => m === 1 || isPaid(m - 1);
 
@@ -240,7 +240,7 @@ function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
     );
 }
 
-function ExpenseForm({ initialData, cardOptions, users, expenseTypes, paymentTerms, onClose, isEdit }) {
+function ExpenseForm({ initialData, cardOptions, users, expenseTypes, paymentTerms, onClose, isEdit, isAdmin = true }) {
     const [paymentType, setPaymentType] = useState(initialData?.payment_type ?? PAYMENT_TYPE_FULL);
 
     const { data, setData, post, put, processing, errors } = useForm({
@@ -290,6 +290,7 @@ function ExpenseForm({ initialData, cardOptions, users, expenseTypes, paymentTer
     return (
         <form onSubmit={submit} className="space-y-4">
             <FormValidationSummary errors={errors} />
+            {isAdmin && (
             <FormField label="User" name="user_id" error={errors.user_id} required>
                 <select
                     className={`w-full rounded-lg border px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 ${errors.user_id ? 'border-red-500 bg-red-50/50 focus:ring-red-500' : 'border-[#1E3A8A]/20 bg-[#F3F4F6] focus:ring-[#2563EB]'}`}
@@ -302,6 +303,7 @@ function ExpenseForm({ initialData, cardOptions, users, expenseTypes, paymentTer
                     ))}
                 </select>
             </FormField>
+            )}
             <FormField label="Card" name="card_id" error={errors.card_id} required>
                 <select
                     className={`w-full rounded-lg border px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 ${errors.card_id ? 'border-red-500 bg-red-50/50 focus:ring-red-500' : 'border-[#1E3A8A]/20 bg-[#F3F4F6] focus:ring-[#2563EB]'}`}
@@ -419,7 +421,7 @@ function ExpenseForm({ initialData, cardOptions, users, expenseTypes, paymentTer
 
 export default function ExpensesIndex() {
     const { props } = usePage();
-    const { expenses, cardOptions, users, expenseTypes, paymentTerms } = props;
+    const { expenses, cardOptions, users, expenseTypes, paymentTerms, isAdmin = true } = props;
     const [localExpenses, setLocalExpenses] = useState(expenses ?? []);
     const [modalState, setModalState] = useState({ open: false, expense: null });
     const [paidModalExpense, setPaidModalExpense] = useState(null);
@@ -492,7 +494,7 @@ export default function ExpensesIndex() {
     };
 
     const columns = [
-        { name: 'User', selector: (row) => row.user_name, sortable: true, cell: (row) => row.user_name || '—' },
+        ...(isAdmin ? [{ name: 'User', selector: (row) => row.user_name, sortable: true, cell: (row) => row.user_name || '—' }] : []),
         { name: 'Card', selector: (row) => row.card_name, sortable: true },
         { name: 'Card No.', selector: (row) => row.card_last_four, sortable: true, cell: (row) => row.card_last_four ? `**** ${row.card_last_four}` : '—' },
         { name: 'Type of expense', selector: (row) => row.expense_type_name, sortable: true, cell: (row) => row.expense_type_name || '—' },
@@ -646,6 +648,7 @@ export default function ExpensesIndex() {
                     paymentTerms={paymentTerms}
                     isEdit={!!modalState.expense}
                     onClose={closeModal}
+                    isAdmin={isAdmin}
                 />
             </Modal>
 

@@ -10,6 +10,7 @@ export default function Dashboard() {
     const installmentExpenses = Array.isArray(props?.installmentExpenses) ? props.installmentExpenses : [];
     const installmentSummary = props?.installmentSummary ?? { formatted_total_remaining: '—' };
     const remainingByUser = Array.isArray(props?.remainingByUser) ? props.remainingByUser : [];
+    const isAdmin = props?.isAdmin === true;
 
     return (
         <AppLayout>
@@ -25,20 +26,23 @@ export default function Dashboard() {
                         href="/cards"
                         className="inline-flex items-center rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-1.5 text-xs font-medium text-[#F3F4F6] hover:bg-[#1E3A8A] hover:border-[#1E3A8A] transition"
                     >
-                        Manage Cards
+                        {isAdmin ? 'Manage Cards' : 'Transactions & statements'}
                     </Link>
+                    {isAdmin && (
                     <Link
                         href="/expenses"
                         className="inline-flex items-center rounded-lg border border-[#1E3A8A]/20 bg-[#F3F4F6] px-3 py-1.5 text-xs font-medium text-[#1E3A8A] hover:bg-[#1E3A8A]/10 transition"
                     >
                         Log Expense
                     </Link>
+                    )}
                 </div>
             </header>
 
             <section className="grid gap-4 sm:grid-cols-3 mb-6">
+                {isAdmin && (
                 <div className="rounded-2xl bg-[#2563EB] border border-[#2563EB] p-4 shadow-sm text-[#F3F4F6]">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-[#F3F4F6]/80 mb-1">Outstanding</div>
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-[#F3F4F6]/80 mb-1">Overall Outstanding Balance</div>
                     <div className="text-2xl font-semibold text-[#F3F4F6]">
                         {metrics.formatted_total_outstanding ?? '—'}
                     </div>
@@ -46,30 +50,37 @@ export default function Dashboard() {
                         Total expenses minus payments; reduced when you mark installments or full payments as paid.
                     </p>
                 </div>
+                )}
 
+                {metrics.total_users != null && (
                 <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
                     <div className="text-[11px] uppercase tracking-[0.18em] text-[#1E3A8A]/60 mb-1">Users</div>
                     <div className="text-2xl font-semibold text-[#1E3A8A]">{metrics.total_users}</div>
                     <p className="mt-1 text-xs text-[#1E3A8A]/70">People with access to CardFlow.</p>
                 </div>
+                )}
 
+                {isAdmin && (
                 <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
                     <div className="text-[11px] uppercase tracking-[0.18em] text-[#1E3A8A]/60 mb-1">Active cards</div>
-                    <div className="text-2xl font-semibold text-[#1E3A8A]">{metrics.active_cards}</div>
+                    <div className="text-2xl font-semibold text-[#1E3A8A]">{metrics.active_cards ?? 0}</div>
                     <p className="mt-1 text-xs text-[#1E3A8A]/70">Cards currently tracked as active.</p>
                 </div>
+                )}
             </section>
 
             {installmentExpenses.length > 0 && (
                 <section className="mb-6">
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="text-sm font-semibold text-[#1E3A8A]">Expenses (installment & full payment)</h2>
+                        {isAdmin && (
                         <Link
                             href="/expenses"
                             className="text-xs font-medium text-[#2563EB] hover:text-[#1E3A8A]"
                         >
                             Manage expenses →
                         </Link>
+                        )}
                     </div>
                     <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mb-4">
                         {remainingByUser.length > 0 ? (
@@ -79,7 +90,7 @@ export default function Dashboard() {
                                     <div className="text-xl font-semibold text-amber-900">
                                         {u.formatted_remaining}
                                     </div>
-                                    <p className="mt-1 text-xs text-amber-800/90">Outstanding for this user.</p>
+                                    <p className="mt-1 text-xs text-amber-800/90">Outstanding balance for this user.</p>
                                 </div>
                             ))
                         ) : (
@@ -133,7 +144,7 @@ export default function Dashboard() {
             <section className="mb-6">
                 <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-semibold text-[#1E3A8A]">Transaction history</h2>
+                        <h2 className="text-sm font-semibold text-[#1E3A8A]">Payment history</h2>
                         <span className="text-[11px] text-[#1E3A8A]/50">
                             {transactionHistory.length ? `${transactionHistory.length} paid` : 'No data'}
                         </span>
@@ -170,6 +181,7 @@ export default function Dashboard() {
                 </div>
             </section>
 
+            {isAdmin && (
             <section className="grid gap-4 lg:grid-cols-1 mb-6">
                 <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
                     <div className="flex items-center justify-between mb-3">
@@ -206,6 +218,7 @@ export default function Dashboard() {
                     </div>
                 </div>
             </section>
+            )}
         </AppLayout>
     );
 }

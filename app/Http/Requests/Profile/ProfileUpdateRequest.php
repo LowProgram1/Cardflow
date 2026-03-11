@@ -19,4 +19,12 @@ class ProfileUpdateRequest extends FormRequest
             'password' => ['nullable', 'string', 'confirmed', Password::defaults()],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'password.confirmed' => 'The password confirmation does not match.',
+            'password.min' => 'Password must be at least :min characters.',
+        ];
+    }
 }

@@ -30,9 +30,12 @@ return [
     | to expire immediately when the browser is closed then you may
     | indicate that via the expire_on_close configuration option.
     |
+    | Recommended for production: 5-30 minutes (auto-logout on inactivity).
+    | Override via SESSION_LIFETIME in .env.
+    |
     */
 
-    'lifetime' => (int) env('SESSION_LIFETIME', 120),
+    'lifetime' => (int) env('SESSION_LIFETIME', 5),
 
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 

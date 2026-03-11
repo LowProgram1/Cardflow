@@ -4,8 +4,10 @@ namespace App\Services\Contracts;
 
 interface DashboardServiceInterface
 {
-    public function metrics(): array;
+    /** @param  int|null  $userId  When set, scope all data to this user (for non-admin). */
+    public function metrics(?int $userId = null): array;
 
-    public function dashboardData(): array;
+    /** @param  int|null  $userId  When set, scope all data to this user (for non-admin). */
+    public function dashboardData(?int $userId = null): array;
 }
 

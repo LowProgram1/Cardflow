@@ -9,14 +9,18 @@ use Illuminate\Support\Collection;
 
 class ExpenseRepository implements ExpenseRepositoryInterface
 {
-    public function paginateWithRelations(int $perPage = 15): LengthAwarePaginator
+    public function paginateWithRelations(int $perPage = 15, ?int $userId = null): LengthAwarePaginator
     {
-        return Expense::query()
+        $query = Expense::query()
             ->with(['card', 'user', 'expenseType', 'paymentTerm'])
             ->orderByDesc('transaction_date')
-            ->orderByDesc('id')
-            ->paginate($perPage)
-            ->withQueryString();
+            ->orderByDesc('id');
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->paginate($perPage)->withQueryString();
     }
 
     public function create(array $attributes): Expense
@@ -37,14 +41,19 @@ class ExpenseRepository implements ExpenseRepositoryInterface
         $expense->delete();
     }
 
-    public function recentWithRelations(int $limit = 10): Collection
+    public function recentWithRelations(int $limit = 10, ?int $userId = null): Collection
     {
-        return Expense::query()
+        $query = Expense::query()
             ->with(['card', 'user', 'expenseType', 'paymentTerm'])
             ->orderByDesc('transaction_date')
             ->orderByDesc('id')
-            ->limit($limit)
-            ->get();
+            ->limit($limit);
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->get();
     }
 
     public function totalByType(?int $userId = null, ?int $cardId = null, ?string $type = null): float
@@ -66,38 +75,55 @@ class ExpenseRepository implements ExpenseRepositoryInterface
         return (float) $query->sum('amount');
     }
 
-    public function getInstallmentExpenses(): Collection
+    public function getInstallmentExpenses(?int $userId = null): Collection
     {
-        return Expense::query()
+        $query = Expense::query()
             ->with(['card', 'user', 'expenseType', 'paymentTerm'])
             ->where('payment_type', 'installment')
             ->whereNotNull('payment_term_id')
-            ->orderByDesc('transaction_date')
-            ->get();
+            ->orderByDesc('transaction_date');
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->get();
     }
 
-    public function getFullPaymentExpenses(): Collection
+    public function getFullPaymentExpenses(?int $userId = null): Collection
     {
-        return Expense::query()
+        $query = Expense::query()
             ->with(['card', 'user', 'expenseType'])
             ->where('payment_type', 'full')
             ->where('type', 'expense')
-            ->orderByDesc('transaction_date')
-            ->get();
+            ->orderByDesc('transaction_date');
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->get();
     }
 
-    public function getTotalPaidPortion(): float
+    public function getTotalPaidPortion(?int $userId = null): float
     {
         $installments = Expense::query()
             ->where('payment_type', 'installment')
             ->where('type', 'expense')
-            ->whereNotNull('monthly_amortization')
-            ->get();
+            ->whereNotNull('monthly_amortization');
+
+        if ($userId !== null) {
+            $installments->where('user_id', $userId);
+        }
+        $installments = $installments->get();
 
         $full = Expense::query()
             ->where('payment_type', 'full')
-            ->where('type', 'expense')
-            ->get();
+            ->where('type', 'expense');
+        if ($userId !== null) {
+            $full->where('user_id', $userId);
+        }
+        $full = $full->get();
 
         $sum = 0.0;
         foreach ($installments as $e) {

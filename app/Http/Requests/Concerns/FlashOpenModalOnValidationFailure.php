@@ -37,6 +37,11 @@ trait FlashOpenModalOnValidationFailure
             $this->session()->flash('openModal', ['context' => $context, 'id' => $id]);
         }
 
+        $this->session()->flash('flash', [
+            'type' => 'error',
+            'message' => 'Please correct the errors below.',
+        ]);
+
         parent::failedValidation($validator);
     }
 }

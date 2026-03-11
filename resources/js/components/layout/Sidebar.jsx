@@ -1,7 +1,11 @@
 import React from 'react';
 import { Link, usePage } from '@inertiajs/react';
 
-const navItems = [
+/** Navigation config: keys visible only to admin (hidden from client/user). */
+const ADMIN_ONLY_NAV_KEYS = ['users', 'expenses'];
+
+/** All sidebar items in display order. */
+const ALL_NAV_ITEMS = [
     {
         name: 'Dashboard',
         href: '/',
@@ -55,30 +59,48 @@ const navItems = [
     },
 ];
 
+/**
+ * Returns nav items to display based on role: admin sees all, client/user sees only Dashboard, Cards, Settings.
+ * @param {boolean} isAdmin - From shared auth.isAdmin (backend is source of truth).
+ * @returns {typeof ALL_NAV_ITEMS}
+ */
+function getNavItemsForRole(isAdmin) {
+    if (isAdmin) return ALL_NAV_ITEMS;
+    return ALL_NAV_ITEMS.filter((item) => !ADMIN_ONLY_NAV_KEYS.includes(item.key));
+}
+
 export function Sidebar({ isCollapsed = false, isMobileOpen = false, onClose }) {
-    const { url } = usePage();
+    const { url, props } = usePage();
+    const auth = props?.auth;
+    const isAdmin = auth?.isAdmin === true;
+    const faviconUrl = props?.favicon_url ?? null;
+    const navItemsFiltered = getNavItemsForRole(isAdmin);
 
     const aside = (
         <aside
             className={[
                 'bg-[#1E3A8A] border-r border-[#1E3A8A] text-[#F3F4F6] flex flex-col shrink-0 transition-[width] duration-200 ease-out min-h-full',
-                isCollapsed ? 'w-[72px] sm:w-[72px]' : 'w-full sm:w-64',
-                isMobileOpen ? 'fixed inset-y-0 left-0 z-40 w-64 shadow-xl min-h-screen' : 'relative sm:min-h-screen min-h-full',
+                isMobileOpen
+                    ? 'fixed inset-y-0 left-0 z-40 w-20 shadow-xl min-h-screen'
+                    : `relative sm:min-h-screen min-h-full ${isCollapsed ? 'w-[72px] sm:w-[72px]' : 'w-full sm:w-64'}`,
             ].join(' ')}
         >
             <div
                 className={[
-                    'bg-[#1E3A8A] px-4 py-3 border-b border-[#1E3A8A] flex items-center gap-3 min-h-10',
-                    isCollapsed ? 'justify-center px-2' : 'justify-between sm:justify-start',
+                    'bg-[#1E3A8A] px-4 py-3 border-b border-[#1E3A8A] flex items-center min-h-10',
+                    (isCollapsed || isMobileOpen) ? 'justify-center px-2' : 'justify-between sm:justify-start gap-3',
                 ].join(' ')}
             >
-                <div className="h-9 w-9 rounded-xl bg-[#1E3A8A] border border-[#F3F4F6]/20 flex items-center justify-center text-xs font-semibold tracking-tight text-[#F3F4F6] shrink-0">
-                    CF
+                <div className="h-9 w-9 rounded-xl bg-[#1E3A8A] flex items-center justify-center shrink-0 overflow-hidden">
+                    {faviconUrl ? (
+                        <img src={faviconUrl} alt="CardFlow" className="h-full w-full object-contain" />
+                    ) : (
+                        <span className="text-xs font-semibold tracking-tight text-[#F3F4F6]">CF</span>
+                    )}
                 </div>
-                {!isCollapsed && (
+                {!isCollapsed && !isMobileOpen && (
                     <div className="min-w-0 flex-1">
                         <div className="text-sm font-semibold tracking-tight text-[#F3F4F6] truncate">CardFlow</div>
-                        <div className="text-[11px] text-[#F3F4F6]/80 truncate">Credit Card Tracker</div>
                     </div>
                 )}
                 {isMobileOpen && (
@@ -95,8 +117,9 @@ export function Sidebar({ isCollapsed = false, isMobileOpen = false, onClose }) 
                 )}
             </div>
             <nav className="px-3 py-4 space-y-1 flex-1 overflow-y-auto bg-[#1E3A8A]">
-                {navItems.map((item) => {
+                {navItemsFiltered.map((item) => {
                     const active = item.href === '/' ? url === '/' : url.startsWith(item.href);
+                    const iconsOnly = isCollapsed || isMobileOpen;
 
                     return (
                         <Link
@@ -104,17 +127,17 @@ export function Sidebar({ isCollapsed = false, isMobileOpen = false, onClose }) 
                             href={item.href}
                             onClick={isMobileOpen ? onClose : undefined}
                             className={[
-                                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
+                                'flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors',
+                                iconsOnly ? 'justify-center px-2' : 'gap-3',
                                 active
                                     ? 'bg-[#F3F4F6]/10 text-[#F3F4F6] border border-[#F3F4F6]/20'
                                     : 'text-[#F3F4F6]/90 hover:bg-[#F3F4F6]/10 hover:text-[#F3F4F6] border border-transparent',
-                                isCollapsed && 'justify-center px-2',
                             ].join(' ')}
-                            title={isCollapsed ? item.name : undefined}
+                            title={iconsOnly ? item.name : undefined}
                         >
                             <span className="shrink-0">{item.icon}</span>
-                            {!isCollapsed && <span className="truncate">{item.name}</span>}
-                            {!isCollapsed && active && (
+                            {!iconsOnly && <span className="truncate">{item.name}</span>}
+                            {!iconsOnly && active && (
                                 <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#F3F4F6] shrink-0" />
                             )}
                         </Link>
@@ -127,15 +150,15 @@ export function Sidebar({ isCollapsed = false, isMobileOpen = false, onClose }) 
                     method="post"
                     href="/logout"
                     className={[
-                        'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[#F3F4F6]/90 hover:bg-[#F3F4F6]/10 hover:text-[#F3F4F6] transition-colors border-0 bg-transparent cursor-pointer',
-                        isCollapsed ? 'justify-center px-2' : '',
+                        'flex w-full items-center rounded-lg px-3 py-2.5 text-sm text-[#F3F4F6]/90 hover:bg-[#F3F4F6]/10 hover:text-[#F3F4F6] transition-colors border-0 bg-transparent cursor-pointer',
+                        (isCollapsed || isMobileOpen) ? 'justify-center px-2' : 'gap-3',
                     ].join(' ')}
-                    title={isCollapsed ? 'Log out' : undefined}
+                    title={(isCollapsed || isMobileOpen) ? 'Log out' : undefined}
                 >
                     <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
-                    {!isCollapsed && <span className="truncate">Log out</span>}
+                    {!isCollapsed && !isMobileOpen && <span className="truncate">Log out</span>}
                 </Link>
             </div>
         </aside>

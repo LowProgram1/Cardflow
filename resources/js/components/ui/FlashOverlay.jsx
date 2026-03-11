@@ -15,6 +15,7 @@ export function FlashOverlay() {
         if (!flash?.message) return;
         // Only show overlay for success (green) or delete (red)
         if (flash.type !== 'success' && flash.type !== 'delete') return;
+        if (flash.key == null) return;
         setVisible(true);
         setFade(false);
         const startFade = setTimeout(() => setFade(true), 400);
@@ -23,7 +24,7 @@ export function FlashOverlay() {
             clearTimeout(startFade);
             clearTimeout(hide);
         };
-    }, [flash?.message, flash?.type]);
+    }, [flash?.key]);
 
     if (!visible || !flash?.message) return null;
 

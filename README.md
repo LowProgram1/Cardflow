@@ -2,17 +2,18 @@
 
 ## 1. Overview
 
-**Cardflow** is a web application for managing credit/debit cards and expenses. It supports full-payment and installment expenses, tracks monthly amortization and payments per installment month, and provides a dashboard with totals and summaries. The app uses a role-based user model (e.g. admin) and centralizes settings for card types, expense types, and payment terms.
+**Cardflow** is a web application for managing credit/debit cards and expenses. It supports full-payment and installment expenses, tracks monthly amortization and payments per installment month, and provides a dashboard with totals and summaries. The app uses **role-based access**: **admin** users have full access (users, expenses, cards CRUD, all settings); **user/client** users see only their own data, limited sidebar (Dashboard, Cards, Settings), profile-only settings, and cards as transactions/statements only.
 
 ---
 
 ## 2. Description & Purpose
 
-- **Cards**: Create and manage cards with name, bank, type, credit limit, statement day, due day, and optional last four digits. Cards can be activated/deactivated and assigned a color for the UI.
-- **Expenses**: Record expenses or payments linked to a card. Expenses can be **full payment** (single amount, mark as paid once) or **installment** (term in months, monthly amortization, per-month payment tracking with optional overpayment applied to the next month).
+- **Cards**: Create and manage cards with name, bank, type, credit limit, statement day, due day, and optional last four digits. Cards can be activated/deactivated and assigned a color. **Admin** can create/edit/delete; **user** can only view transactions and statement of account (no card list tiles).
+- **Expenses**: Record expenses or payments linked to a card. Expenses can be **full payment** (single amount, mark as paid once) or **installment** (term in months, monthly amortization, per-month payment tracking with optional overpayment applied to the next month). **Admin** can manage all expenses; **user** cannot access the Expenses module (sidebar and routes are restricted).
 - **Installment payment rules**: For installments, months must be paid in order (1, then 2, then 3…). The amount paid for a month can be greater than or equal to the amount due; excess is applied to the next month’s bill. Each month’s payment is recorded with a specific amount (stored in `paid_month_amounts`).
-- **Dashboard**: Shows aggregate figures such as total paid portion (full + installment, using actual paid amounts for installments), and other summary data derived from cards and expenses.
-- **Settings**: Single settings area for profile, card types, expense types, and payment terms (CRUD). User management (CRUD) is available for admin.
+- **Dashboard**: **Admin** sees overall outstanding balance, users count, active cards, expenses (installment & full) logs, payment history, and cards list. **User** sees only their own expense logs (installment & full), payment history, and remaining-to-pay; no outstanding balance card, no active cards metric, no cards section, no “Log Expense” / “Manage expenses” links.
+- **Settings**: **Admin** has full settings: Profile, Card types, Expense types, Payment terms. **User** sees only Profile (name and password; email is read-only and cannot be edited).
+- **Users**: User management (list, create, edit, delete) is **admin-only**. The Users link and routes are hidden and protected for non-admin roles.
 
 ---
 
@@ -20,16 +21,21 @@
 
 | Area | Function | Description |
 |------|----------|-------------|
-| **Auth** | Login / Logout | Session-based authentication; logout invalidates session and redirects to dashboard. |
-| **Dashboard** | View summary | Totals and summaries (e.g. paid portion, installment vs full, by card/user). |
-| **Profile** | Update profile | Edit name, email, password (via Settings → Profile). |
-| **Users** | List / Create / Edit / Delete | User management (index, store, update, destroy). |
-| **Cards** | List / Create / Edit / Delete | Card CRUD; link to user, bank, card type, limit, statement_day, due_day, color, last_four, is_active. |
-| **Expenses** | List / Create / Edit / Delete | Expense CRUD; link to card, user, expense type, amount, date, type (expense/payment), payment_type (full/installment), payment_term, monthly_amortization. |
-| **Expenses** | Toggle paid month (installment) | Record or remove payment for a specific installment month. Pay: modal shows amount due, user enters amount paid (≥ due); overpayment reduces next month. Unpay: confirm and remove that month’s payment. Months must be paid in sequence. |
-| **Settings** | Card types | CRUD for card types (e.g. Visa, Mastercard). |
-| **Settings** | Expense types | CRUD for expense types (e.g. Groceries, Utilities). |
-| **Settings** | Payment terms | CRUD for payment terms (e.g. 3, 6, 9, 12 months). |
+| **Auth** | Login / Logout | Session-based authentication; shared `auth.user` and `auth.isAdmin` for frontend; logout invalidates session and redirects to login. |
+| **Auth** | Auto-logout (inactivity) | After 5 minutes of no mouse/keyboard/scroll/touch activity (configurable via `SESSION_LIFETIME` in .env), the user is logged out and redirected to login with an “inactivity” message. When the tab was in the background, logout runs on returning to the tab. Applies to both admin and user. |
+| **Roles** | Admin vs User | Backend: `auth.isAdmin` and `role`; middleware `admin` protects `/users` and `/expenses`. Sidebar shows Users & Expenses only when `auth.isAdmin` is true. |
+| **Dashboard** | View summary | Role-dependent: admin sees full metrics and lists; user sees only their expense logs and payment history. |
+| **Profile** | Update profile | Edit name and password (Settings → Profile). Email is displayed but **not editable**. |
+| **Users** | List / Create / Edit / Delete | **Admin only.** User CRUD; sidebar and routes restricted for non-admin. |
+| **Cards** | List / Create / Edit / Delete | **Admin:** Full CRUD and card grid. **User:** View-only; no card tiles; only “Transactions & statements” (list of cards with View transactions and Statement links). |
+| **Expenses** | List / Create / Edit / Delete | **Admin only.** Expense CRUD; toggle paid month for installments. Non-admin cannot access sidebar link or routes (403). |
+| **Expenses** | Toggle paid month (installment) | Record or remove payment for a specific installment month (admin only). |
+| **Settings** | Card types / Expense types / Payment terms | **Admin only.** CRUD for card types, expense types, and payment terms. |
+| **Settings** | Profile | All roles. Name and password editable; email read-only. |
+| **Settings** | Favicon / Logo | **Admin only.** Upload a .ico file (Settings → Profile) to set the browser tab icon and sidebar logo. One file used for both. |
+| **Security** | Headers | X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Content-Security-Policy; Strict-Transport-Security over HTTPS. |
+| **Security** | Login | Throttled (5 attempts per minute per IP). Post-login redirect validated (same-origin or relative) to prevent open redirects. |
+| **Password** | Strong rules | Min 10 characters, upper and lower case, number, symbol (profile and user create/edit). Optional strength indicator and confirmation match hint in UI. |
 
 ---
 
@@ -38,42 +44,35 @@
 ### 4.1 Backend
 
 - **Framework**: Laravel 12 (PHP 8.2+).
-- **Key packages**:
-  - `inertiajs/inertia-laravel` — Adapter for Inertia.js (server-driven SPA).
-  - `laravel/framework`, `laravel/tinker`.
+- **Key packages**: `inertiajs/inertia-laravel`, `laravel/framework`, `laravel/tinker`.
 - **Architecture**: Controllers → Services → Repositories; Form Requests for validation; Eloquent models.
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| Controllers | `app/Http/Controllers/` | HTTP handling: Dashboard, User, Card, CardType, Expense, ExpenseType, PaymentTerm, Profile, Settings. |
-| Services | `app/Services/` | Business logic: CardService, ExpenseService, UserService, DashboardService (totals, installment aggregation). |
-| Repositories | `app/Repositories/Eloquent/` | Data access: CardRepository, ExpenseRepository, UserRepository (e.g. getInstallmentExpenses, getTotalPaidPortion using `paid_month_amounts` when present). |
-| Models | `app/Models/` | User, Card, CardType, Expense, ExpenseType, PaymentTerm. |
-| Requests | `app/Http/Requests/` | Validation for store/update (Card, User, Expense, ExpenseType, PaymentTerm, CardType, Profile). |
-| Helpers | `app/Helpers/` | e.g. CurrencyHelper for formatting. |
+| Controllers | `app/Http/Controllers/` | Dashboard, User, Card, Expense, Profile, Settings, CardType, ExpenseType, PaymentTerm. Role checks in Dashboard (scoped data), Expense, Card, User (admin middleware or inline). |
+| Middleware | `app/Http/Middleware/` | `HandleInertiaRequests` (shares `auth.user`, `auth.isAdmin`, `auth.idleTimeoutMinutes`, `favicon_url`); `EnsureUserIsAdmin` (alias `admin`) for users/expenses routes; `SecurityHeaders` for response headers. |
+| Services | `app/Services/` | CardService, ExpenseService, UserService, DashboardService (supports optional `userId` for scoped dashboard data). |
+| Repositories | `app/Repositories/Eloquent/` | CardRepository, ExpenseRepository, UserRepository (methods accept optional `userId` for filtering). |
+| Models | `app/Models/` | User (role), Card, CardType, Expense, ExpenseType, PaymentTerm. |
+| Requests | `app/Http/Requests/` | Validation for store/update (Card, User, Expense, etc.). |
+| Helpers | `app/Helpers/` | CurrencyHelper, StatementPeriodHelper. |
 
 ### 4.2 Frontend
 
 - **Stack**: React 18, Inertia.js (React), Vite 7.
-- **Key packages**:
-  - `@inertiajs/react`, `@inertiajs/progress`
-  - `react`, `react-dom`
-  - `react-data-table-component` — Data tables (e.g. expenses, cards, users).
-  - `axios` — HTTP (used by Inertia under the hood where applicable).
-- **Styling**: Tailwind CSS 4 (`@tailwindcss/vite`).
-- **Build**: Vite with `@vitejs/plugin-react` / `laravel-vite-plugin`.
+- **Key packages**: `@inertiajs/react`, `@inertiajs/progress`, `react`, `react-dom`, `react-data-table-component`, Tailwind CSS 4.
 
 | Area | Path | Purpose |
 |------|------|---------|
-| Pages | `resources/js/Pages/` | Dashboard, Users/Index, Cards/Index, Expenses/Index, Settings/Index, CardTypes/Index. |
-| Layout | `resources/js/components/layout/` | AppLayout, Sidebar (navigation). |
-| UI | `resources/js/components/ui/` | Modal, ConfirmModal, SuccessModal, DataTable, FormField, FormValidationSummary, PasswordInput, Toast, FlashOverlay. |
+| Pages | `resources/js/Pages/` | Dashboard, Users/Index, Cards/Index, Expenses/Index, Settings/Index. Dashboard uses `props.isAdmin`; Cards uses `viewOnly` for user role; Settings shows only Profile for non-admin; Expenses shows/hides user column and user dropdown by `isAdmin`. |
+| Layout | `resources/js/components/layout/` | AppLayout (mobile: bottom bar for menu; desktop: top navbar). Sidebar: nav items filtered by `props.auth.isAdmin` (admin sees Users & Expenses; user does not). |
+| UI | `resources/js/components/ui/` | Modal, ConfirmModal, DataTable, FormField, FormValidationSummary, PasswordInput, PasswordStrengthIndicator, PasswordConfirmationHint, FlashBanner, etc. |
 
-### 4.3 Routing (Backend)
+### 4.3 Routing & Middleware
 
-- **web.php**: All app routes (no API prefix).
-- **Key routes**: `GET /` (dashboard), `/logout`, `/profile` → settings, `/settings`, `PATCH /profile`, `resource users|cards|expenses`, card-types/expense-types/payment-terms (index redirect to settings + store/update/destroy), `POST expenses/{expense}/paid-month` (toggle paid month).
-- **Fallback**: Redirect to dashboard.
+- **web.php**: Guest routes (login); auth routes (dashboard, settings, profile, cards, expenses, users, etc.).
+- **Admin-only routes**: `Route::resource('users', ...)->middleware('admin')`; `Route::resource('expenses', ...)->middleware('admin')`; `POST expenses/{expense}/paid-month` and `POST /settings/favicon` use `middleware('admin')`. Non-admin receives **403 Forbidden**. The admin middleware treats null/missing `role` as admin so existing admin accounts are not incorrectly blocked.
+- **Shared data**: `auth.user` (name, email, role), `auth.isAdmin` (boolean). Sidebar reads `usePage().props.auth` to show/hide Users and Expenses.
 
 ---
 
@@ -83,61 +82,47 @@
 
 | Table | Description |
 |-------|-------------|
-| **users** | id, role, name, email, email_verified_at, password, remember_token, timestamps. |
+| **users** | id, **role** (admin|user, default admin), name, email, email_verified_at, password, remember_token, timestamps. |
 | **password_reset_tokens** | email (PK), token, created_at. |
 | **sessions** | id (PK), user_id, ip_address, user_agent, payload, last_activity. |
 | **cards** | id, user_id, bank_name, card_type_id, name, last_four, limit, statement_day, due_day, is_active, color, timestamps. |
 | **card_types** | id, name (unique), timestamps. |
 | **expenses** | id, card_id, expense_type_id, user_id, description, amount, type (expense|payment), payment_type (full|installment), payment_term_id, monthly_amortization, paid_months (JSON), paid_month_amounts (JSON), last_paid_at, transaction_date, category, metadata, timestamps. |
 | **expense_types** | id, name (unique), timestamps. |
-| **payment_terms** | id, months (unique, e.g. 3,6,9,12), timestamps. |
-| **cache** | Laravel cache table. |
-| **jobs** | Laravel queue jobs table. |
+| **payment_terms** | id, months (unique), timestamps. |
+| **cache** / **jobs** | Laravel cache and queue tables. |
 
 ### 5.2 Main Columns (Expenses)
 
 - **type**: `expense` | `payment`.
 - **payment_type**: `full` | `installment`.
-- **payment_term_id**: References `payment_terms` (e.g. 12 months); used for installments.
-- **monthly_amortization**: Required for installments; amount due per month before overpayment carry.
-- **paid_months**: JSON array of month numbers (1-based) that are paid; kept in sync with `paid_month_amounts`.
-- **paid_month_amounts**: JSON object `{ "1": "1000.00", "2": "1200.00" }` for actual amount paid per month; overpayments reduce the next month’s required amount in logic.
-- **last_paid_at**: Set when a payment (full or an installment month) is marked paid; cleared when no paid months remain.
+- **payment_term_id**, **monthly_amortization**: For installments.
+- **paid_months**: JSON array of paid month numbers (1-based).
+- **paid_month_amounts**: JSON object of amount paid per month; used for overpayment carry.
+- **last_paid_at**: Updated when a payment or installment month is marked paid.
 
-### 5.3 Relationships (Eloquent)
+### 5.3 Relationships
 
-- **User**: hasMany Card; hasMany Expense.
+- **User**: hasMany Card, hasMany Expense.
 - **Card**: belongsTo User, CardType; hasMany Expense.
 - **Expense**: belongsTo Card, User, ExpenseType, PaymentTerm.
-- **CardType / ExpenseType / PaymentTerm**: referenced by Card and Expense.
 
 ### 5.4 Migrations (Order)
 
-1. `0001_01_01_000000_create_users_table` (users, password_reset_tokens, sessions)
-2. `0001_01_01_000001_create_cache_table`
-3. `0001_01_01_000002_create_jobs_table`
-4. `2026_03_10_000010_add_role_to_users_table`
-5. `2026_03_10_000020_create_cards_table`
-6. `2026_03_10_000025_create_card_types_table`
-7. `2026_03_10_000027_alter_cards_table_add_bank_and_statement`
-8. `2026_03_10_000030_create_expenses_table`
-9. `2026_03_10_000040_create_expense_types_table`
-10. `2026_03_10_000041_create_payment_terms_table`
-11. `2026_03_10_000042_alter_expenses_add_type_and_payment_fields`
-12. `2026_03_10_000050_add_color_to_cards_table`
-13. `2026_03_10_000060_add_paid_months_to_expenses`
-14. `2026_03_11_000001_add_last_paid_at_to_expenses`
-15. `2026_03_11_000002_add_paid_month_amounts_to_expenses`
+See **MIGRATION.md** for the full ordered list and descriptions of each migration.
 
 ---
 
 ## 6. Quick Start
 
-- Copy `.env.example` to `.env`, configure DB and app URL, run `php artisan key:generate`.
-- Run `composer install`, `npm install`, `npm run build`.
-- Run migrations: `php artisan migrate`.
-- (Optional) Seed: `php artisan db:seed`.
-- Serve: `php artisan serve` (e.g. port 8001); for dev with Vite: `npm run dev` (or project’s dev script).
+1. Copy `.env.example` to `.env`; set `APP_URL`, `DB_*`; run `php artisan key:generate`.
+2. `composer install`, `npm install`, `npm run build`.
+3. Run migrations: `php artisan migrate` (see MIGRATION.md).
+4. (Optional) Set `SESSION_LIFETIME=5` in `.env` for idle timeout in minutes (default 5; auto-logout after inactivity for both admin and user).
+5. (Optional) For production over HTTPS: set `SESSION_SECURE_COOKIE=true` and `SESSION_SAME_SITE=lax` in `.env`.
+6. (Optional) Seed: `php artisan db:seed` or specific seeders (CardTypeSeeder, ExpenseTypeSeeder, PaymentTermSeeder).
+7. Create an admin user (or ensure existing user has `role = 'admin'` in `users` table; null/missing role is treated as admin).
+8. Serve: `php artisan serve`; for dev with Vite: `npm run dev`.
 
 ---
 

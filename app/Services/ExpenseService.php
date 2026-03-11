@@ -16,9 +16,9 @@ class ExpenseService implements ExpenseServiceInterface
     ) {
     }
 
-    public function paginateWithRelations(int $perPage = 15): LengthAwarePaginator
+    public function paginateWithRelations(int $perPage = 15, ?int $userId = null): LengthAwarePaginator
     {
-        return $this->expenses->paginateWithRelations($perPage);
+        return $this->expenses->paginateWithRelations($perPage, $userId);
     }
 
     public function create(array $attributes): Expense
@@ -36,9 +36,9 @@ class ExpenseService implements ExpenseServiceInterface
         DB::transaction(fn () => $this->expenses->delete($expense));
     }
 
-    public function recentWithRelations(int $limit = 10): Collection
+    public function recentWithRelations(int $limit = 10, ?int $userId = null): Collection
     {
-        return $this->expenses->recentWithRelations($limit);
+        return $this->expenses->recentWithRelations($limit, $userId);
     }
 }
 

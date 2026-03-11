@@ -14,15 +14,15 @@ export function SuccessModal() {
     const show = (isSuccess || isDelete) && flash?.message;
 
     useEffect(() => {
-        if (show) setDismissed(false);
-    }, [show, flash?.message]);
+        if (show && flash?.key != null) setDismissed(false);
+    }, [show, flash?.key]);
 
     // Delete: auto-dismiss after 1.5s
     useEffect(() => {
         if (!show || !isDelete) return;
         const id = setTimeout(() => setDismissed(true), 1500);
         return () => clearTimeout(id);
-    }, [show, isDelete]);
+    }, [show, isDelete, flash?.key]);
 
     if (!show || dismissed) return null;
 

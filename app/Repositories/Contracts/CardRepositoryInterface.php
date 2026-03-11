@@ -8,9 +8,9 @@ use Illuminate\Support\Collection;
 
 interface CardRepositoryInterface
 {
-    public function paginate(int $perPage = 15): LengthAwarePaginator;
+    public function paginate(int $perPage = 15, ?int $userId = null): LengthAwarePaginator;
 
-    public function allActive(): Collection;
+    public function allActive(?int $userId = null): Collection;
 
     public function create(array $attributes): Card;
 
@@ -19,5 +19,13 @@ interface CardRepositoryInterface
     public function delete(Card $card): void;
 
     public function countActive(): int;
+
+    public function countActiveForUser(int $userId): int;
+
+    /** @return \Illuminate\Support\Collection<int, \App\Models\Expense> */
+    public function getTransactionsForCard(Card $card, ?\Carbon\Carbon $from = null, ?\Carbon\Carbon $to = null): Collection;
+
+    /** @return array<int, array{value: string, label: string}> */
+    public function getStatementMonthsForCard(Card $card): array;
 }
 

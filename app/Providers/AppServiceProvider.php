@@ -17,6 +17,7 @@ use App\Services\DashboardService;
 use App\Services\ExpenseService;
 use App\Services\UserService;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -40,6 +41,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Password::defaults(function () {
+            return Password::min(10)
+                ->letters()
+                ->mixedCase()
+                ->numbers()
+                ->symbols();
+        });
     }
 }

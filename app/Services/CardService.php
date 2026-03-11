@@ -16,14 +16,14 @@ class CardService implements CardServiceInterface
     ) {
     }
 
-    public function paginate(int $perPage = 15): LengthAwarePaginator
+    public function paginate(int $perPage = 15, ?int $userId = null): LengthAwarePaginator
     {
-        return $this->cards->paginate($perPage);
+        return $this->cards->paginate($perPage, $userId);
     }
 
-    public function allActive(): Collection
+    public function allActive(?int $userId = null): Collection
     {
-        return $this->cards->allActive();
+        return $this->cards->allActive($userId);
     }
 
     public function create(array $attributes): Card
@@ -39,6 +39,17 @@ class CardService implements CardServiceInterface
     public function delete(Card $card): void
     {
         DB::transaction(fn () => $this->cards->delete($card));
+    }
+
+    public function getTransactionsForCard(Card $card, ?\Carbon\Carbon $from = null, ?\Carbon\Carbon $to = null): \Illuminate\Support\Collection
+    {
+        return $this->cards->getTransactionsForCard($card, $from, $to);
+    }
+
+    /** @return array<int, array{value: string, label: string}> */
+    public function getStatementMonthsForCard(Card $card): array
+    {
+        return $this->cards->getStatementMonthsForCard($card);
     }
 }
 

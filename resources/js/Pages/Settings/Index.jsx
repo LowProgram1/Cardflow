@@ -5,10 +5,12 @@ import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { FormField } from '../../components/ui/FormField';
 import { FormValidationSummary } from '../../components/ui/FormValidationSummary';
 import { PasswordInput } from '../../components/ui/PasswordInput';
+import { PasswordStrengthIndicator } from '../../components/ui/PasswordStrengthIndicator';
+import { PasswordConfirmationHint } from '../../components/ui/PasswordConfirmationHint';
 import { AppDataTable } from '../../components/ui/DataTable';
 import { useForm, Link, usePage, router } from '@inertiajs/react';
 
-function ProfileForm({ user }) {
+function ProfileForm({ user, isAdmin, faviconUrl }) {
     const { data, setData, patch, processing, errors, reset } = useForm({
         name: user?.name ?? '',
         password: '',
@@ -47,8 +49,9 @@ function ProfileForm({ user }) {
                     className="w-full rounded-lg bg-[#F3F4F6] border border-[#1E3A8A]/20 px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                     value={data.password}
                     onChange={(e) => setData('password', e.target.value)}
-                    placeholder="Leave blank to keep current password"
+                    placeholder="Min 10 chars, upper & lower case, number, symbol"
                 />
+                <PasswordStrengthIndicator password={data.password} showOnlyWhenFilled />
                 {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
             </div>
             <div className="space-y-1">
@@ -58,6 +61,7 @@ function ProfileForm({ user }) {
                     value={data.password_confirmation}
                     onChange={(e) => setData('password_confirmation', e.target.value)}
                 />
+                <PasswordConfirmationHint password={data.password} confirmation={data.password_confirmation} />
                 {errors.password_confirmation && <p className="text-xs text-red-600 mt-1">{errors.password_confirmation}</p>}
             </div>
             <div className="pt-2">
@@ -70,6 +74,84 @@ function ProfileForm({ user }) {
                 </button>
             </div>
         </form>
+    );
+}
+
+/** Admin-only: upload CardFlow favicon (.ico only). */
+function FaviconForm({ faviconUrl }) {
+    const { props } = usePage();
+    const [file, setFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState(null);
+    const fileInputRef = React.useRef(null);
+
+    const handleFileChange = (e) => {
+        const f = e.target.files?.[0];
+        setError(null);
+        if (!f) {
+            setFile(null);
+            return;
+        }
+        if (!f.name.toLowerCase().endsWith('.ico')) {
+            setError('Only .ico (favicon) files are allowed.');
+            setFile(null);
+            e.target.value = '';
+            return;
+        }
+        setFile(f);
+    };
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!file) return;
+        setUploading(true);
+        setError(null);
+        const formData = new FormData();
+        formData.append('favicon', file);
+        formData.append('_token', props?.csrf_token ?? '');
+
+        router.post('/settings/favicon', formData, {
+            preserveScroll: true,
+            forceFormData: true,
+            onFinish: () => setUploading(false),
+            onError: (errors) => {
+                setError(errors.favicon?.[0] || 'Upload failed.');
+            },
+        });
+    };
+
+    return (
+        <div className="mt-8 pt-6 border-t border-[#1E3A8A]/20">
+            <h3 className="text-sm font-semibold text-[#1E3A8A] mb-1">CardFlow logo / Favicon</h3>
+            <p className="text-xs text-[#1E3A8A]/60 mb-3">Upload a .ico file to use as the browser tab icon (favicon) and the sidebar logo. One file is used for both—only .ico format is accepted.</p>
+            <div className="flex flex-wrap items-end gap-4">
+                {faviconUrl && (
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-[#1E3A8A]/60">Current:</span>
+                        <img src={faviconUrl} alt="Current favicon" className="h-8 w-8 object-contain rounded border border-[#1E3A8A]/20" />
+                    </div>
+                )}
+                <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+                    <div>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".ico,image/x-icon,image/vnd.microsoft.icon"
+                            onChange={handleFileChange}
+                            className="block w-full text-xs text-[#1E3A8A] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#2563EB] file:text-[#F3F4F6] hover:file:bg-[#1E3A8A]"
+                        />
+                        {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={!file || uploading}
+                        className="rounded-lg bg-[#2563EB] px-4 py-2 text-xs font-medium text-[#F3F4F6] hover:bg-[#1E3A8A] disabled:opacity-60"
+                    >
+                        {uploading ? 'Uploading…' : 'Upload favicon'}
+                    </button>
+                </form>
+            </div>
+        </div>
     );
 }
 
@@ -385,7 +467,7 @@ function PaymentTermsSection({ paymentTerms, onRequestDelete, openModal }) {
 
 export default function SettingsIndex() {
     const { props } = usePage();
-    const { user, cardTypes, expenseTypes, paymentTerms, section = 'profile' } = props;
+    const { user, cardTypes, expenseTypes, paymentTerms, section = 'profile', isAdmin = true } = props;
     const openModal = props?.openModal ?? null;
     const [deleteConfirm, setDeleteConfirm] = useState({ open: false, url: null, title: 'Confirm delete' });
 
@@ -398,9 +480,11 @@ export default function SettingsIndex() {
 
     const sections = [
         { key: 'profile', label: 'Profile', href: '/settings?section=profile' },
-        { key: 'card-types', label: 'Card types', href: '/settings?section=card-types' },
-        { key: 'expense-types', label: 'Expense types', href: '/settings?section=expense-types' },
-        { key: 'payment-terms', label: 'Payment terms', href: '/settings?section=payment-terms' },
+        ...(isAdmin ? [
+            { key: 'card-types', label: 'Card types', href: '/settings?section=card-types' },
+            { key: 'expense-types', label: 'Expense types', href: '/settings?section=expense-types' },
+            { key: 'payment-terms', label: 'Payment terms', href: '/settings?section=payment-terms' },
+        ] : []),
     ];
 
     return (
@@ -431,7 +515,8 @@ export default function SettingsIndex() {
                 <div>
                     <h2 className="text-sm font-semibold text-[#1E3A8A] mb-1">Profile</h2>
                     <p className="text-xs text-[#1E3A8A]/60 mb-3">Your profile is linked to your user account. You can change your name and password below; email is displayed but cannot be edited.</p>
-                    <ProfileForm user={user} />
+                    <ProfileForm user={user} isAdmin={isAdmin} faviconUrl={props.favicon_url} />
+                    {isAdmin && <FaviconForm faviconUrl={props.favicon_url} />}
                 </div>
             )}
 

@@ -3,29 +3,41 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\Card;
+use App\Models\Expense;
 use App\Repositories\Contracts\CardRepositoryInterface;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class CardRepository implements CardRepositoryInterface
 {
-    public function paginate(int $perPage = 15): LengthAwarePaginator
+    public function paginate(int $perPage = 15, ?int $userId = null): LengthAwarePaginator
     {
-        return Card::query()
+        $query = Card::query()
             ->with(['cardType'])
             ->withCount('expenses')
-            ->orderBy('name')
-            ->paginate($perPage)
-            ->withQueryString();
+            ->orderBy('name');
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->paginate($perPage)->withQueryString();
     }
 
-    public function allActive(): Collection
+    public function allActive(?int $userId = null): Collection
     {
-        return Card::query()
+        $query = Card::query()
             ->with(['cardType'])
             ->where('is_active', true)
-            ->orderBy('name')
-            ->get();
+            ->orderBy('name');
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->get();
     }
 
     public function create(array $attributes): Card
@@ -49,6 +61,67 @@ class CardRepository implements CardRepositoryInterface
     public function countActive(): int
     {
         return Card::query()->where('is_active', true)->count();
+    }
+
+    public function countActiveForUser(int $userId): int
+    {
+        return Card::query()->where('is_active', true)->where('user_id', $userId)->count();
+    }
+
+    public function getTransactionsForCard(Card $card, ?Carbon $from = null, ?Carbon $to = null): Collection
+    {
+        $query = Expense::query()
+            ->where('card_id', $card->id)
+            ->with(['expenseType', 'user'])
+            ->orderByDesc('transaction_date')
+            ->orderByDesc('id');
+
+        if ($from !== null) {
+            $query->where('transaction_date', '>=', $from->toDateString());
+        }
+        if ($to !== null) {
+            $query->where('transaction_date', '<=', $to->toDateString());
+        }
+
+        return $query->get();
+    }
+
+    public function getStatementMonthsForCard(Card $card): array
+    {
+        $driver = DB::connection()->getDriverName();
+        if ($driver === 'sqlite') {
+            $months = Expense::query()
+                ->where('card_id', $card->id)
+                ->selectRaw('DISTINCT strftime("%Y-%m", transaction_date) as yyyy_mm')
+                ->orderByDesc('yyyy_mm')
+                ->pluck('yyyy_mm')
+                ->filter()
+                ->values();
+        } else {
+            $months = Expense::query()
+                ->where('card_id', $card->id)
+                ->selectRaw('DISTINCT DATE_FORMAT(transaction_date, "%Y-%m") as yyyy_mm')
+                ->orderByDesc('yyyy_mm')
+                ->pluck('yyyy_mm')
+                ->filter()
+                ->values();
+        }
+
+        if ($months->isEmpty()) {
+            return [];
+        }
+
+        return $months->map(function ($yyyyMm) {
+            $parts = explode('-', $yyyyMm);
+            $year = (int) ($parts[0] ?? 0);
+            $month = (int) ($parts[1] ?? 0);
+            $date = Carbon::createFromDate($year, $month, 1);
+
+            return [
+                'value' => $yyyyMm,
+                'label' => $date->format('F Y'),
+            ];
+        })->all();
     }
 }
 

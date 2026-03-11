@@ -180,11 +180,21 @@ function CardForm({ initialData, onClose, isEdit, cardTypes = [] }) {
     );
 }
 
+function getCurrentStatementMonth() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export default function CardsIndex() {
     const { props } = usePage();
-    const { cards, cardTypes } = props;
+    const { cards, cardTypes, viewOnly = false } = props;
     const [modalState, setModalState] = useState({ open: false, card: null });
     const [deleteConfirm, setDeleteConfirm] = useState({ open: false, url: null });
+    const [viewModalCard, setViewModalCard] = useState(null);
+    const [transactions, setTransactions] = useState([]);
+    const [statementMonthsList, setStatementMonthsList] = useState([]);
+    const [statementMonth, setStatementMonth] = useState(getCurrentStatementMonth());
+    const [loadingTransactions, setLoadingTransactions] = useState(false);
 
     const openModal = props?.openModal;
     useEffect(() => {
@@ -197,6 +207,44 @@ export default function CardsIndex() {
             setModalState({ open: true, card: null });
         }
     }, [openModal?.context, openModal?.id, cards]);
+
+    useEffect(() => {
+        if (!viewModalCard?.id) {
+            setTransactions([]);
+            setStatementMonthsList([]);
+            return;
+        }
+        setTransactions([]);
+        setLoadingTransactions(true);
+        const params = new URLSearchParams({ month: statementMonth });
+        fetch(`/cards/${viewModalCard.id}/transactions?${params}`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                setTransactions(data.transactions ?? []);
+            })
+            .catch(() => setTransactions([]))
+            .finally(() => setLoadingTransactions(false));
+    }, [viewModalCard?.id, statementMonth]);
+
+    useEffect(() => {
+        if (!viewModalCard?.id) return;
+        fetch(`/cards/${viewModalCard.id}/statement-months`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                const list = data.statement_months ?? [];
+                setStatementMonthsList(list);
+                if (list.length > 0 && !list.some((m) => m.value === statementMonth)) {
+                    setStatementMonth(list[0].value);
+                }
+            })
+            .catch(() => setStatementMonthsList([]));
+    }, [viewModalCard?.id]);
 
     const getCardGradient = (card) => {
         const map = {
@@ -213,27 +261,90 @@ export default function CardsIndex() {
     const getCardTextClass = (color) => (color === 'platinum' ? 'text-gray-900' : 'text-[#F3F4F6]');
 
     const openCreate = () => setModalState({ open: true, card: null });
-    const openEdit = (card) => setModalState({ open: true, card });
+    const openEdit = (card, e) => {
+        e?.stopPropagation?.();
+        setModalState({ open: true, card });
+    };
     const closeModal = () => setModalState({ open: false, card: null });
+    const openViewModal = (card) => {
+        setViewModalCard(card);
+        setStatementMonth(getCurrentStatementMonth());
+    };
+    const closeViewModal = () => {
+        setViewModalCard(null);
+        setTransactions([]);
+    };
+    const statementUrl = (cardId, month) => `/cards/${cardId}/statement?month=${month || getCurrentStatementMonth()}`;
 
     return (
         <AppLayout>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div className="min-w-0">
                     <div className="flex items-center gap-3 flex-wrap">
-                        <h1 className="text-lg font-semibold text-[#1E3A8A]">Manage Credit Cards</h1>
+                        <h1 className="text-lg font-semibold text-[#1E3A8A]">
+                            {viewOnly ? 'Transactions & statements' : 'Manage Credit Cards'}
+                        </h1>
+                        {!viewOnly && (
                         <button
                             onClick={openCreate}
                             className="inline-flex items-center rounded-lg bg-[#2563EB] px-3 py-1.5 text-sm font-medium text-[#F3F4F6] hover:bg-[#1E3A8A] shrink-0"
                         >
                             + New card
                         </button>
+                        )}
                     </div>
-                    <p className="text-sm text-[#1E3A8A]/70 mt-1">Track multiple credit cards and limits.</p>
+                    <p className="text-sm text-[#1E3A8A]/70 mt-1">
+                        {viewOnly ? 'View transactions and download statements for your cards.' : 'Track multiple credit cards and limits.'}
+                    </p>
                 </div>
             </div>
 
-            {cards.length === 0 ? (
+            {viewOnly ? (
+                <div className="rounded-2xl border border-[#1E3A8A]/20 bg-[#F3F4F6] overflow-hidden">
+                    {cards.length === 0 ? (
+                        <div className="p-8 text-center text-sm text-[#1E3A8A]/60">
+                            No cards linked to your account.
+                        </div>
+                    ) : (
+                        <ul className="divide-y divide-[#1E3A8A]/10">
+                            {cards.map((card) => (
+                                <li key={card.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-[#1E3A8A]/5">
+                                    <div>
+                                        <span className="font-medium text-[#1E3A8A]">{card.name}</span>
+                                        {card.last_four && (
+                                            <span className="ml-2 text-xs text-[#1E3A8A]/60">•••• {card.last_four}</span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => openViewModal(card)}
+                                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#2563EB] bg-[#2563EB]/10 px-3 py-1.5 text-xs font-medium text-[#2563EB] hover:bg-[#2563EB]/20"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                            View transactions
+                                        </button>
+                                        <a
+                                            href={statementUrl(card.id, getCurrentStatementMonth())}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#1E3A8A]/30 bg-white px-3 py-1.5 text-xs font-medium text-[#1E3A8A] hover:bg-[#1E3A8A]/10"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            Statement
+                                        </a>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            ) : cards.length === 0 ? (
                 <div className="rounded-2xl border border-[#1E3A8A]/20 bg-[#E5E7EB] border-dashed p-12 text-center">
                     <p className="text-sm text-[#1E3A8A]/60">No cards yet.</p>
                     <p className="text-sm text-[#1E3A8A]/50 mt-1">Add your first credit card to get started.</p>
@@ -304,7 +415,19 @@ export default function CardsIndex() {
                                 <div className="flex items-center gap-1">
                                     <button
                                         type="button"
-                                        onClick={() => openEdit(card)}
+                                        onClick={() => openViewModal(card)}
+                                        className="p-1.5 rounded-lg text-[#1E3A8A]/70 hover:bg-[#1E3A8A]/10 hover:text-[#1E3A8A]"
+                                        title="View transactions"
+                                        aria-label="View transactions"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => openEdit(card, e)}
                                         className="p-1.5 rounded-lg text-[#2563EB] hover:bg-[#2563EB]/10 hover:text-[#1E3A8A]"
                                         title="Edit"
                                         aria-label="Edit card"
@@ -315,7 +438,7 @@ export default function CardsIndex() {
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setDeleteConfirm({ open: true, url: `/cards/${card.id}` })}
+                                        onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ open: true, url: `/cards/${card.id}` }); }}
                                         className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700"
                                         title="Remove"
                                         aria-label="Remove card"
@@ -330,6 +453,92 @@ export default function CardsIndex() {
                     ))}
                 </div>
             )}
+
+            <Modal
+                title={viewModalCard ? `Transactions — ${viewModalCard.name}` : 'Transactions'}
+                open={!!viewModalCard}
+                onClose={closeViewModal}
+            >
+                {viewModalCard && (
+                    <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+                        {/* Statement of Account: file icon + list of files */}
+                        <div className="rounded-lg border border-[#1E3A8A]/20 bg-[#F3F4F6]/50 p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                                <svg className="w-5 h-5 text-[#1E3A8A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <span className="text-sm font-semibold text-[#1E3A8A]">Statement of Account</span>
+                            </div>
+                            <p className="text-xs text-[#1E3A8A]/70 mb-2">Download statement (PDF) by month:</p>
+                            <ul className="space-y-1">
+                                {statementMonthsList.length === 0 ? (
+                                    <li className="text-xs text-[#1E3A8A]/60 py-1">No transactions yet — statements will appear here once you have transactions.</li>
+                                ) : (
+                                    statementMonthsList.map((opt) => (
+                                        <li key={opt.value}>
+                                            <a
+                                                href={statementUrl(viewModalCard.id, opt.value)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-2 rounded px-2 py-1 text-xs text-[#2563EB] hover:bg-[#2563EB]/10 hover:text-[#1E3A8A]"
+                                            >
+                                                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                {opt.label} Statement
+                                            </a>
+                                        </li>
+                                    ))
+                                )}
+                            </ul>
+                        </div>
+
+                        {/* Transaction history */}
+                        <div>
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                <span className="text-sm font-semibold text-[#1E3A8A]">Transaction history</span>
+                                <label className="inline-flex items-center gap-2 text-xs text-[#1E3A8A]">
+                                    <span>Month:</span>
+                                    <input
+                                        type="month"
+                                        value={statementMonth}
+                                        onChange={(e) => setStatementMonth(e.target.value)}
+                                        className="rounded-lg border border-[#1E3A8A]/20 px-2 py-1 text-[#1E3A8A] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                                    />
+                                </label>
+                            </div>
+                            <div className="rounded-lg border border-[#1E3A8A]/20 overflow-hidden">
+                                {loadingTransactions ? (
+                                    <div className="px-4 py-6 text-center text-sm text-[#1E3A8A]/60">Loading…</div>
+                                ) : transactions.length === 0 ? (
+                                    <div className="px-4 py-6 text-center text-sm text-[#1E3A8A]/60">No transactions in this period.</div>
+                                ) : (
+                                    <table className="w-full text-xs">
+                                        <thead>
+                                            <tr className="border-b border-[#1E3A8A]/10 bg-[#F3F4F6]">
+                                                <th className="px-3 py-2 text-left font-semibold text-[#1E3A8A]">Date</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-[#1E3A8A]">Description</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-[#1E3A8A]">Type</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-[#1E3A8A]">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {transactions.map((tx) => (
+                                                <tr key={tx.id} className="border-b border-[#1E3A8A]/5">
+                                                    <td className="px-3 py-2 text-[#1E3A8A]/90">{tx.transaction_date}</td>
+                                                    <td className="px-3 py-2 text-[#1E3A8A]/90">{tx.description || tx.expense_type_name || '—'}</td>
+                                                    <td className="px-3 py-2 text-[#1E3A8A]/90 capitalize">{tx.type}</td>
+                                                    <td className="px-3 py-2 text-right font-medium text-[#1E3A8A]">{tx.formatted_amount}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </Modal>
 
             <Modal
                 title={modalState.card ? 'Edit card' : 'New card'}

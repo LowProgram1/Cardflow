@@ -8,14 +8,20 @@ use Illuminate\Support\Collection;
 
 interface CardServiceInterface
 {
-    public function paginate(int $perPage = 15): LengthAwarePaginator;
+    public function paginate(int $perPage = 15, ?int $userId = null): LengthAwarePaginator;
 
-    public function allActive(): Collection;
+    public function allActive(?int $userId = null): Collection;
 
     public function create(array $attributes): Card;
 
     public function update(Card $card, array $attributes): Card;
 
     public function delete(Card $card): void;
+
+    /** @return \Illuminate\Support\Collection<int, \App\Models\Expense> */
+    public function getTransactionsForCard(Card $card, ?\Carbon\Carbon $from = null, ?\Carbon\Carbon $to = null): Collection;
+
+    /** @return array<int, array{value: string, label: string}> */
+    public function getStatementMonthsForCard(Card $card): array;
 }
 

@@ -35,19 +35,34 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $faviconPath = public_path('favicon.ico');
+        $faviconUrl = file_exists($faviconPath) ? '/favicon.ico?v=' . filemtime($faviconPath) : null;
+
         return array_merge(parent::share($request), [
             'auth' => [
                 'user' => $request->user() ? [
                     'name' => $request->user()->name,
                     'email' => $request->user()->email,
+                    'role' => $request->user()->role ?? 'admin',
                 ] : null,
+                'isAdmin' => $request->user() && (($request->user()->role ?? 'admin') === 'admin'),
+                'idleTimeoutMinutes' => $request->user() ? (int) config('session.lifetime', 5) : null,
             ],
-            'flash' => fn () => [
-                'message' => $request->session()->get('flash.message'),
-                'type' => $request->session()->get('flash.type'),
-            ],
+            'flash' => function () use ($request) {
+                $flash = $request->session()->get('flash');
+                $message = is_array($flash) ? ($flash['message'] ?? null) : null;
+                if ($message === null) {
+                    return null;
+                }
+                return [
+                    'message' => $message,
+                    'type' => is_array($flash) ? ($flash['type'] ?? 'success') : 'success',
+                    'key' => microtime(true),
+                ];
+            },
             'openModal' => fn () => $request->session()->get('openModal'),
             'csrf_token' => csrf_token(),
+            'favicon_url' => $faviconUrl,
         ]);
     }
 }

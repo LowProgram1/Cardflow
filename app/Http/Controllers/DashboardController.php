@@ -14,7 +14,10 @@ class DashboardController extends Controller
 
     public function index(): InertiaResponse
     {
-        $data = $this->dashboard->dashboardData();
+        $user = auth()->user();
+        $userId = ($user->role ?? '') === 'admin' ? null : $user->id;
+        $data = $this->dashboard->dashboardData($userId);
+        $data['isAdmin'] = ($user->role ?? '') === 'admin';
 
         return $this->inertia('Dashboard', $data);
     }

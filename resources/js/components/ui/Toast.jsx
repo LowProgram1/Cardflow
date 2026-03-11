@@ -7,12 +7,12 @@ export function Toast() {
     const [visible, setVisible] = React.useState(!!flash?.message);
 
     useEffect(() => {
-        if (flash?.message) {
+        if (flash?.message != null && flash?.key != null) {
             setVisible(true);
             const id = setTimeout(() => setVisible(false), 2600);
             return () => clearTimeout(id);
         }
-    }, [flash?.message]);
+    }, [flash?.key]);
 
     if (!flash?.message || !visible) return null;
 

@@ -18,26 +18,34 @@ class DashboardService implements DashboardServiceInterface
     ) {
     }
 
-    public function metrics(): array
+    public function metrics(?int $userId = null): array
     {
-        $totalExpenses = $this->expenses->totalByType(type: 'expense');
-        $totalPayments = $this->expenses->totalByType(type: 'payment');
-        $paidPortion = $this->expenses->getTotalPaidPortion();
+        $totalExpenses = $this->expenses->totalByType($userId, null, 'expense');
+        $totalPayments = $this->expenses->totalByType($userId, null, 'payment');
+        $paidPortion = $this->expenses->getTotalPaidPortion($userId);
         $outstanding = $totalExpenses - $totalPayments - $paidPortion;
 
-        return [
+        $result = [
             'total_outstanding' => max(0, $outstanding),
             'formatted_total_outstanding' => CurrencyHelper::formatCurrency(max(0, $outstanding)),
-            'total_users' => $this->users->count(),
-            'active_cards' => $this->cards->countActive(),
         ];
+
+        if ($userId === null) {
+            $result['total_users'] = $this->users->count();
+            $result['active_cards'] = $this->cards->countActive();
+        } else {
+            $result['total_users'] = null;
+            $result['active_cards'] = $this->cards->countActiveForUser($userId);
+        }
+
+        return $result;
     }
 
-    public function dashboardData(): array
+    public function dashboardData(?int $userId = null): array
     {
-        $metrics = $this->metrics();
+        $metrics = $this->metrics($userId);
 
-        $cards = $this->cards->allActive()->map(function ($card) {
+        $cards = $this->cards->allActive($userId)->map(function ($card) {
             return [
                 'id' => $card->id,
                 'name' => $card->name,
@@ -48,7 +56,7 @@ class DashboardService implements DashboardServiceInterface
             ];
         });
 
-        $recentExpenses = $this->expenses->recentWithRelations()->map(function ($expense) {
+        $recentExpenses = $this->expenses->recentWithRelations(50, $userId)->map(function ($expense) {
             return [
                 'id' => $expense->id,
                 'description' => $expense->description,
@@ -80,7 +88,7 @@ class DashboardService implements DashboardServiceInterface
             ]);
         }
 
-        $installmentExpenses = $this->expenses->getInstallmentExpenses()->filter(function ($expense) {
+        $installmentExpenses = $this->expenses->getInstallmentExpenses($userId)->filter(function ($expense) {
             $months = $expense->paymentTerm?->months ?? 0;
             $paidCount = count($expense->paid_months ?? []);
             $remainingMonths = max(0, $months - $paidCount);
@@ -123,7 +131,7 @@ class DashboardService implements DashboardServiceInterface
             ];
         });
 
-        $fullPaymentExpenses = $this->expenses->getFullPaymentExpenses()->filter(function ($expense) {
+        $fullPaymentExpenses = $this->expenses->getFullPaymentExpenses($userId)->filter(function ($expense) {
             $isPaid = in_array(1, $expense->paid_months ?? [], true);
             if (! $isPaid) {
                 return true;
@@ -190,16 +198,20 @@ class DashboardService implements DashboardServiceInterface
             return Carbon::parse($datePaid)->startOfDay()->gte(now()->subDays(5)->startOfDay());
         })->values()->all();
 
-        $remainingByUser = $allExpenseItems->groupBy('user_id')->map(function ($items, $userId) {
+        $remainingByUser = $allExpenseItems->groupBy('user_id')->map(function ($items, $uid) {
             $remaining = $items->sum('remaining');
             $userName = $items->first()['user_name'] ?? '—';
             return [
-                'user_id' => $userId === 'null' || $userId === '' ? null : (int) $userId,
+                'user_id' => $uid === 'null' || $uid === '' ? null : (int) $uid,
                 'user_name' => $userName,
                 'remaining' => $remaining,
                 'formatted_remaining' => CurrencyHelper::formatCurrency($remaining),
             ];
         })->values()->filter(fn ($u) => $u['remaining'] > 0)->values()->all();
+
+        if ($userId !== null) {
+            $remainingByUser = []; // Single-user view: don't show "by user" breakdown on dashboard
+        }
 
         $installmentSummary = [
             'total_paid' => $allExpenseItems->sum('total_paid'),

@@ -1,0 +1,32 @@
+<?php
+
+namespace App\Helpers;
+
+use Carbon\Carbon;
+
+class StatementPeriodHelper
+{
+    /**
+     * Statement period: from day after statement_day in previous month, through statement_day in current month.
+     * E.g. statement_day=15, year=2025, month=3 → 2025-02-16 to 2025-03-15.
+     */
+    public static function periodFor(int $year, int $month, int $statementDay): array
+    {
+        $start = Carbon::createFromDate($year, $month - 1, $statementDay)->addDay()->startOfDay();
+        $end = Carbon::createFromDate($year, $month, $statementDay)->endOfDay();
+
+        return [$start, $end];
+    }
+
+    /**
+     * @return array{0: \Carbon\Carbon, 1: \Carbon\Carbon}
+     */
+    public static function periodForYearMonth(string $yearMonth, int $statementDay): array
+    {
+        $parts = explode('-', $yearMonth);
+        $year = (int) ($parts[0] ?? date('Y'));
+        $month = (int) ($parts[1] ?? date('n'));
+
+        return self::periodFor($year, $month, $statementDay);
+    }
+}

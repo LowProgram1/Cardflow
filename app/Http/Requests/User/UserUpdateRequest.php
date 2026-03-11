@@ -5,6 +5,7 @@ namespace App\Http\Requests\User;
 use App\Http\Requests\Concerns\FlashOpenModalOnValidationFailure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class UserUpdateRequest extends FormRequest
 {
@@ -26,8 +27,16 @@ class UserUpdateRequest extends FormRequest
                 'max:255',
                 Rule::unique('users', 'email')->ignore($userId),
             ],
-            'password' => ['nullable', 'string', 'min:8'],
+            'password' => ['nullable', 'string', 'confirmed', Password::defaults()],
             'role' => ['required', 'string', 'in:admin,user'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'password.confirmed' => 'The password confirmation does not match.',
+            'password.min' => 'Password must be at least :min characters.',
         ];
     }
 }
