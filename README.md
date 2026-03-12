@@ -22,6 +22,7 @@
 | Area | Function | Description |
 |------|----------|-------------|
 | **Auth** | Login / Logout | Session-based authentication; shared `auth.user` and `auth.isAdmin` for frontend; logout invalidates session and redirects to login. |
+| **Auth** | Session/CSRF expiry (419) | When the session or CSRF token has expired, the app redirects to the login page instead of showing the "419 | PAGE EXPIRED" error. Handled server-side in `bootstrap/app.php` (TokenMismatchException and HttpException 419 → redirect to login) and client-side in `resources/js/bootstrap.js` (fetch wrapper redirects on 419 for XHR requests). |
 | **Auth** | Auto-logout (inactivity) | After 5 minutes of no mouse/keyboard/scroll/touch activity (configurable via `SESSION_LIFETIME` in .env), the user is logged out and redirected to login with an “inactivity” message. When the tab was in the background, logout runs on returning to the tab. Applies to both admin and user. |
 | **Roles** | Admin vs User | Backend: `auth.isAdmin` and `role`; middleware `admin` protects `/users` and `/expenses`. Sidebar shows Users & Expenses only when `auth.isAdmin` is true. |
 | **Dashboard** | View summary | Role-dependent: admin sees full metrics and lists; user sees only their expense logs and payment history. |
@@ -34,7 +35,7 @@
 | **Settings** | Profile | All roles. Name and password editable; email read-only. |
 | **Settings** | Favicon / Logo | **Admin only.** Upload a .ico file (Settings → Profile) to set the browser tab icon and sidebar logo. One file used for both. |
 | **UI (responsive)** | Desktop navigation | Vertical sidebar (≥768px): logo, Profile (avatar + name) pinned, nav links (Dashboard, Users, Cards, Expenses, Settings), Logout at bottom. Main content has margin-left; bottom bar hidden. |
-| **UI (responsive)** | Mobile navigation | Fixed bottom bar (<768px): Dashboard, Users, Cards, Expenses (role-filtered); label above icon; safe-area padding. Top header: Profile, Settings, Logout. Sidebar hidden on mobile. Main content padding-bottom so bottom nav does not overlap. |
+| **UI (responsive)** | Mobile navigation | Fixed bottom bar (<768px): Dashboard, Users, Cards, Expenses (role-filtered); label below icon; safe-area padding. Top header: Profile, Settings, Logout. Sidebar hidden on mobile. Main content padding-bottom so bottom nav does not overlap. |
 | **UI (responsive)** | Dashboard actions | “Manage Cards” and “Log Expense” show icon-only on mobile (text hidden); full label on desktop. Touch-friendly padding on mobile. |
 | **Security** | Headers | X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Content-Security-Policy; Strict-Transport-Security over HTTPS. |
 | **Security** | Login | Throttled (5 attempts per minute per IP). Post-login redirect validated (same-origin or relative) to prevent open redirects. |
@@ -54,6 +55,7 @@
 |-------|------|---------|
 | Controllers | `app/Http/Controllers/` | Dashboard, User, Card, Expense, Profile, Settings, CardType, ExpenseType, PaymentTerm. Role checks in Dashboard (scoped data), Expense, Card, User (admin middleware or inline). |
 | Middleware | `app/Http/Middleware/` | `HandleInertiaRequests` (shares `auth.user`, `auth.isAdmin`, `auth.idleTimeoutMinutes`, `favicon_url`); `EnsureUserIsAdmin` (alias `admin`) for users/expenses routes; `SecurityHeaders` for response headers. |
+| Exceptions | `bootstrap/app.php` | Custom renderable for `TokenMismatchException` and `HttpException` 419 → redirect to login (avoids showing "419 | PAGE EXPIRED"). |
 | Services | `app/Services/` | CardService, ExpenseService, UserService, DashboardService (supports optional `userId` for scoped dashboard data). |
 | Repositories | `app/Repositories/Eloquent/` | CardRepository, ExpenseRepository, UserRepository (methods accept optional `userId` for filtering). |
 | Models | `app/Models/` | User (role), Card, CardType, Expense, ExpenseType, PaymentTerm. |
@@ -68,7 +70,7 @@
 | Area | Path | Purpose |
 |------|------|---------|
 | Pages | `resources/js/Pages/` | Dashboard, Users/Index, Cards/Index, Expenses/Index, Settings/Index. Dashboard uses `props.isAdmin`; Cards uses `viewOnly` for user role; Settings shows only Profile for non-admin; Expenses shows/hides user column and user dropdown by `isAdmin`. |
-| Layout | `resources/js/components/layout/` | **Desktop (≥768px):** Vertical Sidebar (logo, pinned Profile, nav, Settings, Logout at bottom); main content with margin-left; bottom nav hidden. **Mobile (<768px):** Sidebar hidden; fixed bottom nav (Dashboard, Users, Cards, Expenses) with label above icon; top header with Profile, Settings, Logout. AppLayout and Sidebar; nav items filtered by `props.auth.isAdmin`. |
+| Layout | `resources/js/components/layout/` | **Desktop (≥768px):** Vertical Sidebar (logo, pinned Profile, nav, Settings, Logout at bottom); main content with margin-left; bottom nav hidden. **Mobile (<768px):** Sidebar hidden; fixed bottom nav (Dashboard, Users, Cards, Expenses) with label below icon; top header with Profile, Settings, Logout. AppLayout and Sidebar; nav items filtered by `props.auth.isAdmin`. |
 | UI | `resources/js/components/ui/` | Modal, ConfirmModal, DataTable, FormField, FormValidationSummary, PasswordInput, PasswordStrengthIndicator, PasswordConfirmationHint, FlashBanner, etc. |
 
 ### 4.3 Routing & Middleware
