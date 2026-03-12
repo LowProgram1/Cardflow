@@ -4,8 +4,8 @@ import { Link, usePage } from '@inertiajs/react';
 /** Navigation config: keys visible only to admin (hidden from client/user). */
 const ADMIN_ONLY_NAV_KEYS = ['users', 'expenses'];
 
-/** All sidebar items in display order. */
-const ALL_NAV_ITEMS = [
+/** All sidebar items in display order. Exported for mobile bottom nav. */
+export const ALL_NAV_ITEMS = [
     {
         name: 'Dashboard',
         href: '/',
@@ -64,7 +64,7 @@ const ALL_NAV_ITEMS = [
  * @param {boolean} isAdmin - From shared auth.isAdmin (backend is source of truth).
  * @returns {typeof ALL_NAV_ITEMS}
  */
-function getNavItemsForRole(isAdmin) {
+export function getNavItemsForRole(isAdmin) {
     if (isAdmin) return ALL_NAV_ITEMS;
     return ALL_NAV_ITEMS.filter((item) => !ADMIN_ONLY_NAV_KEYS.includes(item.key));
 }
@@ -73,6 +73,7 @@ export function Sidebar({ isCollapsed = false, isMobileOpen = false, onClose }) 
     const { url, props } = usePage();
     const auth = props?.auth;
     const isAdmin = auth?.isAdmin === true;
+    const userName = auth?.user?.name ?? 'User';
     const faviconUrl = props?.favicon_url ?? null;
     const navItemsFiltered = getNavItemsForRole(isAdmin);
 
@@ -82,13 +83,13 @@ export function Sidebar({ isCollapsed = false, isMobileOpen = false, onClose }) 
                 'bg-[#1E3A8A] border-r border-[#1E3A8A] text-[#F3F4F6] flex flex-col shrink-0 transition-[width] duration-200 ease-out min-h-full',
                 isMobileOpen
                     ? 'fixed inset-y-0 left-0 z-40 w-20 shadow-xl min-h-screen'
-                    : `relative sm:min-h-screen min-h-full ${isCollapsed ? 'w-[72px] sm:w-[72px]' : 'w-full sm:w-64'}`,
+                    : `relative md:min-h-screen min-h-full ${isCollapsed ? 'w-[72px] md:w-[72px]' : 'w-full md:w-64'}`,
             ].join(' ')}
         >
             <div
                 className={[
-                    'bg-[#1E3A8A] px-4 py-3 border-b border-[#1E3A8A] flex items-center min-h-10',
-                    (isCollapsed || isMobileOpen) ? 'justify-center px-2' : 'justify-between sm:justify-start gap-3',
+                    'bg-[#1E3A8A] px-4 py-3 border-b border-[#1E3A8A]/40 flex items-center min-h-10',
+                    (isCollapsed || isMobileOpen) ? 'justify-center px-2' : 'justify-between md:justify-start gap-3',
                 ].join(' ')}
             >
                 <div className="h-9 w-9 rounded-xl bg-[#1E3A8A] flex items-center justify-center shrink-0 overflow-hidden">
@@ -107,13 +108,29 @@ export function Sidebar({ isCollapsed = false, isMobileOpen = false, onClose }) 
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-2 rounded-lg text-[#F3F4F6]/90 hover:bg-[#F3F4F6]/10 hover:text-[#F3F4F6] shrink-0 ml-auto sm:hidden"
+                        className="p-2 rounded-lg text-[#F3F4F6]/90 hover:bg-[#F3F4F6]/10 hover:text-[#F3F4F6] shrink-0 ml-auto md:hidden"
                         aria-label="Close menu"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
+                )}
+            </div>
+            {/* Pinned Profile (desktop sidebar): avatar + name */}
+            <div
+                className={[
+                    'border-b border-[#1E3A8A]/40 px-3 py-2.5 flex items-center gap-3 bg-[#1E3A8A] shrink-0',
+                    (isCollapsed || isMobileOpen) ? 'justify-center px-2' : '',
+                ].join(' ')}
+            >
+                <div className="h-8 w-8 rounded-full bg-[#F3F4F6]/20 border border-[#F3F4F6]/30 flex items-center justify-center shrink-0">
+                    <svg className="w-4 h-4 text-[#F3F4F6]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                </div>
+                {!isCollapsed && !isMobileOpen && (
+                    <span className="text-sm font-medium text-[#F3F4F6] truncate" title={userName}>{userName}</span>
                 )}
             </div>
             <nav className="px-3 py-4 space-y-1 flex-1 overflow-y-auto bg-[#1E3A8A]">

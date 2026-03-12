@@ -33,6 +33,9 @@
 | **Settings** | Card types / Expense types / Payment terms | **Admin only.** CRUD for card types, expense types, and payment terms. |
 | **Settings** | Profile | All roles. Name and password editable; email read-only. |
 | **Settings** | Favicon / Logo | **Admin only.** Upload a .ico file (Settings → Profile) to set the browser tab icon and sidebar logo. One file used for both. |
+| **UI (responsive)** | Desktop navigation | Vertical sidebar (≥768px): logo, Profile (avatar + name) pinned, nav links (Dashboard, Users, Cards, Expenses, Settings), Logout at bottom. Main content has margin-left; bottom bar hidden. |
+| **UI (responsive)** | Mobile navigation | Fixed bottom bar (<768px): Dashboard, Users, Cards, Expenses (role-filtered); label above icon; safe-area padding. Top header: Profile, Settings, Logout. Sidebar hidden on mobile. Main content padding-bottom so bottom nav does not overlap. |
+| **UI (responsive)** | Dashboard actions | “Manage Cards” and “Log Expense” show icon-only on mobile (text hidden); full label on desktop. Touch-friendly padding on mobile. |
 | **Security** | Headers | X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Content-Security-Policy; Strict-Transport-Security over HTTPS. |
 | **Security** | Login | Throttled (5 attempts per minute per IP). Post-login redirect validated (same-origin or relative) to prevent open redirects. |
 | **Password** | Strong rules | Min 10 characters, upper and lower case, number, symbol (profile and user create/edit). Optional strength indicator and confirmation match hint in UI. |
@@ -65,7 +68,7 @@
 | Area | Path | Purpose |
 |------|------|---------|
 | Pages | `resources/js/Pages/` | Dashboard, Users/Index, Cards/Index, Expenses/Index, Settings/Index. Dashboard uses `props.isAdmin`; Cards uses `viewOnly` for user role; Settings shows only Profile for non-admin; Expenses shows/hides user column and user dropdown by `isAdmin`. |
-| Layout | `resources/js/components/layout/` | AppLayout (mobile: bottom bar for menu; desktop: top navbar). Sidebar: nav items filtered by `props.auth.isAdmin` (admin sees Users & Expenses; user does not). |
+| Layout | `resources/js/components/layout/` | **Desktop (≥768px):** Vertical Sidebar (logo, pinned Profile, nav, Settings, Logout at bottom); main content with margin-left; bottom nav hidden. **Mobile (<768px):** Sidebar hidden; fixed bottom nav (Dashboard, Users, Cards, Expenses) with label above icon; top header with Profile, Settings, Logout. AppLayout and Sidebar; nav items filtered by `props.auth.isAdmin`. |
 | UI | `resources/js/components/ui/` | Modal, ConfirmModal, DataTable, FormField, FormValidationSummary, PasswordInput, PasswordStrengthIndicator, PasswordConfirmationHint, FlashBanner, etc. |
 
 ### 4.3 Routing & Middleware

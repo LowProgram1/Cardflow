@@ -24,16 +24,24 @@ export default function Dashboard() {
                 <div className="flex flex-wrap gap-2">
                     <Link
                         href="/cards"
-                        className="inline-flex items-center rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-1.5 text-xs font-medium text-[#F3F4F6] hover:bg-[#1E3A8A] hover:border-[#1E3A8A] transition"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#2563EB] bg-[#2563EB] p-3 md:px-3 md:py-1.5 text-xs font-medium text-[#F3F4F6] hover:bg-[#1E3A8A] hover:border-[#1E3A8A] transition"
+                        title={isAdmin ? 'Manage Cards' : 'Transactions & statements'}
                     >
-                        {isAdmin ? 'Manage Cards' : 'Transactions & statements'}
+                        <svg className="w-5 h-5 shrink-0 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                        <span className="hidden md:inline">{isAdmin ? 'Manage Cards' : 'Transactions & statements'}</span>
                     </Link>
                     {isAdmin && (
                     <Link
                         href="/expenses"
-                        className="inline-flex items-center rounded-lg border border-[#1E3A8A]/20 bg-[#F3F4F6] px-3 py-1.5 text-xs font-medium text-[#1E3A8A] hover:bg-[#1E3A8A]/10 transition"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#1E3A8A]/20 bg-[#F3F4F6] p-3 md:px-3 md:py-1.5 text-xs font-medium text-[#1E3A8A] hover:bg-[#1E3A8A]/10 transition"
+                        title="Log Expense"
                     >
-                        Log Expense
+                        <svg className="w-5 h-5 shrink-0 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span className="hidden md:inline">Log Expense</span>
                     </Link>
                     )}
                 </div>
