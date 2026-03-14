@@ -37,9 +37,9 @@
 | **UI (responsive)** | Desktop navigation | Vertical sidebar (≥768px): logo, Profile (avatar + name) pinned, nav links (Dashboard, Users, Cards, Expenses, Settings), Logout at bottom. Main content has margin-left; bottom bar hidden. |
 | **UI (responsive)** | Mobile navigation | Fixed bottom bar (<768px): Dashboard, Users, Cards, Expenses (role-filtered); label below icon; safe-area padding. Top header: Profile, Settings, Logout. Sidebar hidden on mobile. Main content padding-bottom so bottom nav does not overlap. |
 | **UI (responsive)** | Dashboard actions | “Manage Cards” and “Log Expense” show icon-only on mobile (text hidden); full label on desktop. Touch-friendly padding on mobile. |
-| **Security** | Headers | X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Content-Security-Policy; Strict-Transport-Security over HTTPS. |
-| **Security** | Login | Throttled (5 attempts per minute per IP). Post-login redirect validated (same-origin or relative) to prevent open redirects. |
-| **Password** | Strong rules | Min 10 characters, upper and lower case, number, symbol (profile and user create/edit). Optional strength indicator and confirmation match hint in UI. |
+| **Security** | Headers | X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Content-Security-Policy, COOP/CORP; Strict-Transport-Security over HTTPS. See [docs/SECURITY.md](docs/SECURITY.md). |
+| **Security** | Login / Auth | Throttled (auth and auth-sensitive limiters). Post-login redirect validated (same-origin or relative) to prevent open redirects. Host header validation when `ALLOWED_HOSTS` is set. |
+| **Password** | Strong rules | Min 12 characters, upper and lower case, number, symbol (profile and user create/edit). Optional strength indicator and confirmation match hint in UI. |
 
 ---
 
@@ -54,7 +54,7 @@
 | Layer | Path | Purpose |
 |-------|------|---------|
 | Controllers | `app/Http/Controllers/` | Dashboard, User, Card, Expense, Profile, Settings, CardType, ExpenseType, PaymentTerm. Role checks in Dashboard (scoped data), Expense, Card, User (admin middleware or inline). |
-| Middleware | `app/Http/Middleware/` | `HandleInertiaRequests` (shares `auth.user`, `auth.isAdmin`, `auth.idleTimeoutMinutes`, `favicon_url`); `EnsureUserIsAdmin` (alias `admin`) for users/expenses routes; `SecurityHeaders` for response headers. |
+| Middleware | `app/Http/Middleware/` | `ValidateHost` (allowed hosts); `HandleInertiaRequests` (shares `auth.user`, `auth.isAdmin`, `auth.idleTimeoutMinutes`, `favicon_url`); `EnsureUserIsAdmin` (alias `admin`); `SecurityHeaders` for response headers; `CheckFeature` (alias `feature`) for feature-gated routes. |
 | Exceptions | `bootstrap/app.php` | Custom renderable for `TokenMismatchException` and `HttpException` 419 → redirect to login (avoids showing "419 | PAGE EXPIRED"). |
 | Services | `app/Services/` | CardService, ExpenseService, UserService, DashboardService (supports optional `userId` for scoped dashboard data). |
 | Repositories | `app/Repositories/Eloquent/` | CardRepository, ExpenseRepository, UserRepository (methods accept optional `userId` for filtering). |
@@ -114,7 +114,17 @@
 
 ### 5.4 Migrations (Order)
 
-See **MIGRATION.md** for the full ordered list and descriptions of each migration.
+See **[docs/MIGRATION.md](docs/MIGRATION.md)** for the full ordered list and descriptions of each migration.
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/MIGRATION.md](docs/MIGRATION.md) | Database migrations: order, how to run, optional seeders. |
+| [docs/SECURITY.md](docs/SECURITY.md) | Web security: headers, rate limiting, session, production checklist. |
+| [docs/CUSTOMIZE_EMAILS.md](docs/CUSTOMIZE_EMAILS.md) | Customizing email templates and verification flow. |
 
 ---
 
@@ -122,15 +132,43 @@ See **MIGRATION.md** for the full ordered list and descriptions of each migratio
 
 1. Copy `.env.example` to `.env`; set `APP_URL`, `DB_*`; run `php artisan key:generate`.
 2. `composer install`, `npm install`, `npm run build`.
-3. Run migrations: `php artisan migrate` (see MIGRATION.md).
+3. Run migrations: `php artisan migrate` (see [docs/MIGRATION.md](docs/MIGRATION.md)).
 4. (Optional) Set `SESSION_LIFETIME=5` in `.env` for idle timeout in minutes (default 5; auto-logout after inactivity for both admin and user).
 5. (Optional) For production over HTTPS: set `SESSION_SECURE_COOKIE=true` and `SESSION_SAME_SITE=lax` in `.env`.
 6. (Optional) Seed: `php artisan db:seed` or specific seeders (CardTypeSeeder, ExpenseTypeSeeder, PaymentTermSeeder).
 7. Create an admin user (or ensure existing user has `role = 'admin'` in `users` table; null/missing role is treated as admin).
 8. Serve: `php artisan serve`; for dev with Vite: `npm run dev`.
 
+### 6.1 Development: live reload (no need to stop server or run build)
+
+To get **live updates** when you change frontend code (JS/React/CSS), use the Vite dev server so you don’t have to run `npm run build` or restart the PHP server on every change.
+
+**Option A – one command (recommended)**  
+From the project root, run:
+```bash
+npm run start
+```
+This starts both the Vite dev server and `php artisan serve`. Edit React/JS/CSS and see changes in the browser immediately (hot module replacement). You do **not** need to stop the server or run `npm run build` for frontend changes.
+
+**Option B – two terminals**  
+- Terminal 1: `npm run dev` (Vite with HMR).  
+- Terminal 2: `php artisan serve`.  
+Open the app at the URL shown by `php artisan serve` (e.g. `http://127.0.0.1:8000`). Frontend changes will reload automatically.
+
+**Backend (PHP) changes**  
+For changes to PHP, Blade, or `.env`, a **browser refresh** is usually enough. You only need to restart `php artisan serve` if you change config, routes, or run `php artisan config:clear` / `route:clear`. You do **not** need to run `npm run build` during development.
+
+**If you see a blank page and the tab title is "Laravel"**  
+- The app needs built frontend assets or a running Vite dev server. Either run `npm run build` once (then refresh), or run `npm run start` (or `npm run dev` + `php artisan serve`) so Vite serves the app. The browser tab title will show "CardFlow" when the app loads; if you still see "Laravel", set `APP_NAME=CardFlow` in your `.env`.
+
 ---
 
-## 7. License
+## 7. Repository
+
+Source code: [https://github.com/LowProgram1/Web-Applications.git](https://github.com/LowProgram1/Web-Applications.git)
+
+---
+
+## 8. License
 
 MIT (or as specified in the project).

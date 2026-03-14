@@ -44,7 +44,7 @@ php artisan migrate:rollback
 
 ## Migration Order and Summary
 
-Migrations must run in this order (Laravel runs them by filename/date). Below is the full list used in Cardflow.
+Migrations run in filename order. Below is the full list used in Cardflow.
 
 | # | Migration file | Description |
 |---|----------------|-------------|
@@ -63,6 +63,22 @@ Migrations must run in this order (Laravel runs them by filename/date). Below is
 | 13 | `2026_03_10_000060_add_paid_months_to_expenses` | Adds to `expenses`: `paid_months` (JSON array of paid month numbers) for installment tracking. |
 | 14 | `2026_03_11_000001_add_last_paid_at_to_expenses` | Adds `last_paid_at` (timestamp) to `expenses`; set when a payment or installment month is marked paid. |
 | 15 | `2026_03_11_000002_add_paid_month_amounts_to_expenses` | Adds `paid_month_amounts` (JSON) to `expenses` for actual amount paid per month; used for overpayment carry to next month. |
+| 16 | `2026_03_12_000001_create_features_table` | Creates `features` (id, name unique, display_name). For feature flags (e.g. cards, expense_tracker, salary_monitoring). |
+| 17 | `2026_03_12_000002_create_feature_user_table` | Creates pivot `feature_user` linking users to features. |
+| 18 | `2026_03_13_150541_encrypt_sensitive_columns_on_cards_table` | Encrypts `name`, `last_four`, `bank_name` on `cards` (text columns; Laravel Crypt). Card `name` was later decrypted again (see migration 31). |
+| 19 | `2026_03_13_151451_assign_cards_feature_to_existing_users` | Data migration: assigns the cards feature to existing users. |
+| 20 | `2026_03_14_000001_create_salary_classes_table` | Creates `salary_classes`: user_id, class_name, duration (minutes). |
+| 21 | `2026_03_14_000002_create_salary_rates_table` | Creates `salary_rates`: user_id, rate_date (or year), hourly_rate, urgent_rate. |
+| 22 | `2026_03_14_000003_create_salary_payments_table` | Creates `salary_payments`: salary_class_id, salary_rate_id, schedule_duration, etc. |
+| 23 | `2026_03_14_015634_add_employment_type_to_salary_payments_table` | Adds `employment_type` (full_time/part_time) to `salary_payments`. |
+| 24 | `2026_03_15_000001_add_created_by_to_expenses` | Adds `created_by` (nullable FK to users) to `expenses` to track who created the expense (admin vs client). |
+| 25 | `2026_03_15_000001_change_salary_rates_year_to_date` | Changes `salary_rates` to use `rate_date` (date) instead of `year` (integer). |
+| 26 | `2026_03_15_000002_create_part_times_table` | Creates `part_times`: student_name, schedule, rate_per_hr, duration_hr, amount_to_be_paid (later adds schedule_days). |
+| 27 | `2026_03_16_000001_add_schedule_days_to_part_times` | Adds `schedule_days` to `part_times`. |
+| 28 | `2026_03_16_000001_add_urgent_rate_to_salary_rates` | Adds `urgent_rate` to `salary_rates`. |
+| 29 | `2026_03_16_000002_add_schedule_duration_to_salary_payments` | Adds `schedule_duration` to `salary_payments`. |
+| 30 | `2026_03_17_000001_create_part_time_payments_table` | Creates `part_time_payments` for part-time salary payment records. |
+| 31 | `2026_03_18_000001_decrypt_card_name_on_cards_table` | Decrypts `name` on `cards` so card name is stored and displayed as plain text; `last_four` and `bank_name` remain encrypted. |
 
 ---
 
@@ -78,6 +94,12 @@ Migrations must run in this order (Laravel runs them by filename/date). Below is
 ## Optional seeders
 
 After migrations, you can seed reference data:
+
+**Features** (e.g. cards, expense_tracker, salary_monitoring):
+
+```bash
+php artisan db:seed --class=FeatureSeeder
+```
 
 **Card types** (e.g. VISA, Mastercard):
 
@@ -99,14 +121,14 @@ php artisan db:seed --class=ExpenseTypeSeeder
 php artisan db:seed --class=PaymentTermSeeder
 ```
 
-Expense types and payment terms can also be managed under **Settings → Expense types** and **Settings → Payment terms** (admin only).
-
 ---
 
 ## Dependencies between migrations
 
 - **card_types** must exist before **cards** can reference `card_type_id` (migration 7).
-- **expense_types** and **payment_terms** must exist before **expenses** can reference them (migration 8 and later alters).
-- **users** must exist before **cards** and **expenses** (both reference `user_id`).
+- **expense_types** and **payment_terms** must exist before **expenses** can reference them (migrations 8–11).
+- **users** must exist before **cards**, **expenses**, **salary_classes**, **salary_rates**.
+- **features** and **feature_user** before assigning features to users (migration 19).
+- **salary_classes** and **salary_rates** before **salary_payments** (migrations 20–22).
 
 Laravel’s migration order (by filename) satisfies these dependencies.
