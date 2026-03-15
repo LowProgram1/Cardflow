@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedStringCast;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -25,6 +26,8 @@ class Card extends Model
     protected $casts = [
         'limit' => 'decimal:2',
         'is_active' => 'boolean',
+        'last_four' => EncryptedStringCast::class,
+        'bank_name' => EncryptedStringCast::class,
     ];
 
     public function user()

@@ -16,6 +16,9 @@ use App\Services\Contracts\UserServiceInterface;
 use App\Services\DashboardService;
 use App\Services\ExpenseService;
 use App\Services\UserService;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -42,11 +45,35 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Password::defaults(function () {
-            return Password::min(10)
+            return Password::min(12)
                 ->letters()
                 ->mixedCase()
                 ->numbers()
                 ->symbols();
+        });
+
+        // Auth rate limit: 5 attempts per minute per IP (login, register, forgot password)
+        RateLimiter::for('auth', function (Request $request) {
+            return Limit::perMinute(5)->by($request->ip());
+        });
+
+        // Stricter limit for password reset / sensitive auth
+        RateLimiter::for('auth-sensitive', function (Request $request) {
+            return Limit::perMinute(3)->by($request->ip());
+        });
+
+        // General web: 120 requests per minute per user (or IP for guests) to reduce abuse
+        RateLimiter::for('web', function (Request $request) {
+            $key = $request->user()?->id ?? $request->ip();
+
+            return Limit::perMinute(120)->by((string) $key);
+        });
+
+        // Export / heavy actions: 10 per minute per user
+        RateLimiter::for('exports', function (Request $request) {
+            $key = $request->user()?->id ?? $request->ip();
+
+            return Limit::perMinute(10)->by((string) $key);
         });
     }
 }

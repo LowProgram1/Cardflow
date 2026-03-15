@@ -8,7 +8,7 @@ use Illuminate\Support\Collection;
 
 interface ExpenseServiceInterface
 {
-    public function paginateWithRelations(int $perPage = 15, ?int $userId = null): LengthAwarePaginator;
+    public function paginateWithRelations(int $perPage = 15, ?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): LengthAwarePaginator;
 
     public function create(array $attributes): Expense;
 

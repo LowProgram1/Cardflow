@@ -1,13 +1,13 @@
 import React from 'react';
-import { useForm } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import { PasswordInput } from '../../components/ui/PasswordInput';
 import { FormValidationSummary } from '../../components/ui/FormValidationSummary';
 
 export default function Login() {
+    const { flash } = usePage().props;
     const { data, setData, post, processing, errors } = useForm({
         email: '',
         password: '',
-        remember: false,
     });
 
     const submit = (e) => {
@@ -23,6 +23,11 @@ export default function Login() {
                         <h1 className="text-xl font-semibold text-[#1E3A8A]">Cardflow</h1>
                         <p className="text-sm text-[#1E3A8A]/70 mt-1">Sign in to your account</p>
                     </div>
+                    {flash?.message && (
+                        <div className={`mb-4 rounded-lg border px-3 py-2 text-sm ${flash.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' : flash.type === 'error' ? 'border-red-200 bg-red-50 text-red-800' : 'border-[#1E3A8A]/20 bg-[#1E3A8A]/5 text-[#1E3A8A]'}`}>
+                            {flash.message}
+                        </div>
+                    )}
                     <form onSubmit={submit} className="space-y-4">
                         <FormValidationSummary errors={errors} />
                         <div>
@@ -59,16 +64,15 @@ export default function Login() {
                             {errors.password && (
                                 <p className="mt-1 text-xs text-red-600">{errors.password}</p>
                             )}
+                            <div className="mt-1.5 text-right">
+                                <Link
+                                    href="/forgot-password"
+                                    className="text-xs text-[#2563EB] hover:text-[#1E3A8A] hover:underline"
+                                >
+                                    Forgot password?
+                                </Link>
+                            </div>
                         </div>
-                        <label className="flex items-center gap-2 text-sm text-[#1E3A8A]">
-                            <input
-                                type="checkbox"
-                                checked={data.remember}
-                                onChange={(e) => setData('remember', e.target.checked)}
-                                className="h-3.5 w-3.5 rounded border-[#1E3A8A]/30 text-[#2563EB] focus:ring-[#2563EB]"
-                            />
-                            Remember me
-                        </label>
                         <button
                             type="submit"
                             disabled={processing}
@@ -76,6 +80,12 @@ export default function Login() {
                         >
                             {processing ? 'Signing in…' : 'Sign in'}
                         </button>
+                        <p className="text-center text-sm text-[#1E3A8A]/70">
+                            Don&apos;t have an account?{' '}
+                            <Link href="/register" className="text-[#2563EB] hover:text-[#1E3A8A] font-medium hover:underline">
+                                Sign up
+                            </Link>
+                        </p>
                     </form>
                 </div>
             </div>

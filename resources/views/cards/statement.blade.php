@@ -52,6 +52,28 @@
         </tbody>
     </table>
 
+    @if(isset($paymentHistory) && count($paymentHistory) > 0)
+    <h2 style="font-size: 14px; margin-top: 20px; margin-bottom: 8px;">Payment history</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th class="amount">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($paymentHistory as $row)
+            <tr>
+                <td>{{ $row['date'] }}</td>
+                <td>{{ $row['description'] }}</td>
+                <td class="amount">{{ $row['formatted_amount'] }}</td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+    @endif
+
     <div class="footer">
         Generated on {{ now()->format('F j, Y') }}. Use your browser’s Print option and “Save as PDF” to download.
     </div>

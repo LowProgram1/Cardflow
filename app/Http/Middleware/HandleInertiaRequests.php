@@ -41,12 +41,14 @@ class HandleInertiaRequests extends Middleware
         return array_merge(parent::share($request), [
             'auth' => [
                 'user' => $request->user() ? [
+                    'id' => $request->user()->id,
                     'name' => $request->user()->name,
                     'email' => $request->user()->email,
                     'role' => $request->user()->role ?? 'admin',
                 ] : null,
                 'isAdmin' => $request->user() && (($request->user()->role ?? 'admin') === 'admin'),
                 'idleTimeoutMinutes' => $request->user() ? (int) config('session.lifetime', 5) : null,
+                'features' => $request->user() ? $request->user()->features()->get()->pluck('name')->all() : [],
             ],
             'flash' => function () use ($request) {
                 $flash = $request->session()->get('flash');

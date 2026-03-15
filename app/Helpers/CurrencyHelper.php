@@ -10,11 +10,7 @@ class CurrencyHelper
             return '-';
         }
 
-        $formatter = new \NumberFormatter(config('app.locale', 'en_US'), \NumberFormatter::CURRENCY);
-
-        $formatted = $formatter->formatCurrency($amount, $currency);
-
-        return $formatted !== false ? $formatted : sprintf('%s %.2f', $currency, $amount);
+        return number_format(round((float) $amount, 2), 2, '.', ',');
     }
 }
 

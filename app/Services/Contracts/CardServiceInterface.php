@@ -12,6 +12,9 @@ interface CardServiceInterface
 
     public function allActive(?int $userId = null): Collection;
 
+    /** All active cards for admin expense linking (minimal data: id, user, last_four). */
+    public function allActiveForExpenseLinking(): Collection;
+
     public function create(array $attributes): Card;
 
     public function update(Card $card, array $attributes): Card;
@@ -23,5 +26,8 @@ interface CardServiceInterface
 
     /** @return array<int, array{value: string, label: string}> */
     public function getStatementMonthsForCard(Card $card): array;
+
+    /** @return array<int, array{date: string, description: string, amount: float}> */
+    public function getPaymentHistoryForCard(Card $card, \Carbon\Carbon $from, \Carbon\Carbon $to): array;
 }
 

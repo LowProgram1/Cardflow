@@ -1,6 +1,122 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { Link, usePage } from '@inertiajs/react';
+
+const INITIAL_VISIBLE_COUNT = 5;
+
+function PaymentHistory({ transactionHistory }) {
+    const [showAll, setShowAll] = useState(false);
+    const total = transactionHistory.length;
+    const visible = showAll ? transactionHistory : transactionHistory.slice(0, INITIAL_VISIBLE_COUNT);
+    const hasMore = total > INITIAL_VISIBLE_COUNT;
+
+    return (
+        <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-[#1E3A8A]">Payment history</h2>
+                <span className="text-[11px] text-[#1E3A8A]/50">
+                    {total ? `${total} paid` : 'No data'}
+                </span>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                    <thead>
+                        <tr className="border-b border-[#1E3A8A]/20 text-[#1E3A8A]/70">
+                            <th className="py-2 pr-3 font-semibold">User</th>
+                            <th className="py-2 pr-3 font-semibold">Amount paid</th>
+                            <th className="py-2 pr-3 font-semibold">Date paid</th>
+                            <th className="py-2 font-semibold">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {total === 0 && (
+                            <tr>
+                                <td colSpan={4} className="py-4 text-[#1E3A8A]/60 text-center">
+                                    Paid expenses and payments will appear here.
+                                </td>
+                            </tr>
+                        )}
+                        {visible.map((row) => (
+                            <tr key={row.id} className="border-b border-[#1E3A8A]/10 hover:bg-[#1E3A8A]/5">
+                                <td className="py-2 pr-3 text-[#1E3A8A]">{row.user_name ?? '—'}</td>
+                                <td className="py-2 pr-3 font-medium text-[#2563EB]">{row.formatted_amount_paid}</td>
+                                <td className="py-2 pr-3 text-[#1E3A8A]/80">{row.date_paid ?? row.transaction_date ?? '—'}</td>
+                                <td className="py-2 text-[#1E3A8A]/80">{row.description ?? '—'}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {hasMore && (
+                <div className="mt-3 flex justify-center">
+                    <button
+                        type="button"
+                        onClick={() => setShowAll((prev) => !prev)}
+                        className="text-xs font-medium text-[#2563EB] hover:text-[#1E3A8A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 rounded px-3 py-1.5"
+                    >
+                        {showAll ? 'Show less' : `Show more (${total - INITIAL_VISIBLE_COUNT} more)`}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function ExpenseList({ items }) {
+    const [showAll, setShowAll] = useState(false);
+    const total = items.length;
+    const visible = showAll ? items : items.slice(0, INITIAL_VISIBLE_COUNT);
+    const hasMore = total > INITIAL_VISIBLE_COUNT;
+
+    return (
+        <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
+            <div className="space-y-2 text-xs">
+                {visible.map((item) => (
+                    <div
+                        key={`${item.payment_type}-${item.id}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#1E3A8A]/20 bg-white px-3 py-2"
+                    >
+                        <div>
+                            <div className="font-medium text-[#1E3A8A]">
+                                {item.expense_type_name || (item.payment_type === 'full' ? 'Full payment' : 'Installment')} · {item.card_name}
+                                {item.payment_type === 'full' && (
+                                    <span className="ml-1 text-[11px] text-[#1E3A8A]/50">(1 mo)</span>
+                                )}
+                                {item.user_name && item.user_name !== '—' && (
+                                    <span className="ml-1 text-[11px] text-[#1E3A8A]/60">· {item.user_name}</span>
+                                )}
+                            </div>
+                            <div className="text-[11px] text-[#1E3A8A]/60">
+                                {item.transaction_date}
+                                {item.payment_type === 'installment' && ` · ${item.months} mo × ${item.formatted_monthly}`}
+                                {item.payment_type === 'full' && ` · ${item.formatted_monthly}`}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-right">
+                            <span className="text-green-700 font-medium" title="Paid so far">
+                                {item.paid_months_count}/{item.months} paid · {item.formatted_total_paid}
+                            </span>
+                            <span className="text-amber-800 font-medium" title="Remaining">
+                                {item.formatted_remaining} left
+                            </span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {hasMore && (
+                <div className="mt-3 flex justify-center">
+                    <button
+                        type="button"
+                        onClick={() => setShowAll((prev) => !prev)}
+                        className="text-xs font-medium text-[#2563EB] hover:text-[#1E3A8A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 rounded px-3 py-1.5"
+                    >
+                        {showAll ? 'Show less' : `Show more (${total - INITIAL_VISIBLE_COUNT} more)`}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function Dashboard() {
     const { props } = usePage();
@@ -14,37 +130,8 @@ export default function Dashboard() {
 
     return (
         <AppLayout>
-            <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-                <div>
-                    <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-[#1E3A8A]">Overview</h1>
-                    <p className="text-xs sm:text-sm text-[#1E3A8A]/70 mt-1">
-                        Snapshot of your credit card exposure and recent activity.
-                    </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <Link
-                        href="/cards"
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#2563EB] bg-[#2563EB] p-3 md:px-3 md:py-1.5 text-xs font-medium text-[#F3F4F6] hover:bg-[#1E3A8A] hover:border-[#1E3A8A] transition"
-                        title={isAdmin ? 'Manage Cards' : 'Transactions & statements'}
-                    >
-                        <svg className="w-5 h-5 shrink-0 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                        </svg>
-                        <span className="hidden md:inline">{isAdmin ? 'Manage Cards' : 'Transactions & statements'}</span>
-                    </Link>
-                    {isAdmin && (
-                    <Link
-                        href="/expenses"
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#1E3A8A]/20 bg-[#F3F4F6] p-3 md:px-3 md:py-1.5 text-xs font-medium text-[#1E3A8A] hover:bg-[#1E3A8A]/10 transition"
-                        title="Log Expense"
-                    >
-                        <svg className="w-5 h-5 shrink-0 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        <span className="hidden md:inline">Log Expense</span>
-                    </Link>
-                    )}
-                </div>
+            <header className="mb-6">
+                <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-[#1E3A8A]">Overview</h1>
             </header>
 
             <section className="grid gap-4 sm:grid-cols-3 mb-6">
@@ -111,82 +198,12 @@ export default function Dashboard() {
                             </div>
                         )}
                     </div>
-                    <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
-                        <div className="space-y-2 text-xs">
-                            {installmentExpenses.map((item) => (
-                                <div
-                                    key={`${item.payment_type}-${item.id}`}
-                                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#1E3A8A]/20 bg-white px-3 py-2"
-                                >
-                                    <div>
-                                        <div className="font-medium text-[#1E3A8A]">
-                                            {item.expense_type_name || (item.payment_type === 'full' ? 'Full payment' : 'Installment')} · {item.card_name}
-                                            {item.payment_type === 'full' && (
-                                                <span className="ml-1 text-[11px] text-[#1E3A8A]/50">(1 mo)</span>
-                                            )}
-                                            {item.user_name && item.user_name !== '—' && (
-                                                <span className="ml-1 text-[11px] text-[#1E3A8A]/60">· {item.user_name}</span>
-                                            )}
-                                        </div>
-                                        <div className="text-[11px] text-[#1E3A8A]/60">
-                                            {item.transaction_date}
-                                            {item.payment_type === 'installment' && ` · ${item.months} mo × ${item.formatted_monthly}`}
-                                            {item.payment_type === 'full' && ` · ${item.formatted_monthly}`}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-4 text-right">
-                                        <span className="text-green-700 font-medium" title="Paid so far">
-                                            {item.paid_months_count}/{item.months} paid · {item.formatted_total_paid}
-                                        </span>
-                                        <span className="text-amber-800 font-medium" title="Remaining">
-                                            {item.formatted_remaining} left
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <ExpenseList items={installmentExpenses} />
                 </section>
             )}
 
             <section className="mb-6">
-                <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-semibold text-[#1E3A8A]">Payment history</h2>
-                        <span className="text-[11px] text-[#1E3A8A]/50">
-                            {transactionHistory.length ? `${transactionHistory.length} paid` : 'No data'}
-                        </span>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-xs text-left">
-                            <thead>
-                                <tr className="border-b border-[#1E3A8A]/20 text-[#1E3A8A]/70">
-                                    <th className="py-2 pr-3 font-semibold">User</th>
-                                    <th className="py-2 pr-3 font-semibold">Amount paid</th>
-                                    <th className="py-2 pr-3 font-semibold">Date paid</th>
-                                    <th className="py-2 font-semibold">Description</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {transactionHistory.length === 0 && (
-                                    <tr>
-                                        <td colSpan={4} className="py-4 text-[#1E3A8A]/60 text-center">
-                                            Paid expenses and payments will appear here.
-                                        </td>
-                                    </tr>
-                                )}
-                                {transactionHistory.map((row) => (
-                                    <tr key={row.id} className="border-b border-[#1E3A8A]/10 hover:bg-[#1E3A8A]/5">
-                                        <td className="py-2 pr-3 text-[#1E3A8A]">{row.user_name ?? '—'}</td>
-                                        <td className="py-2 pr-3 font-medium text-[#2563EB]">{row.formatted_amount_paid}</td>
-                                        <td className="py-2 pr-3 text-[#1E3A8A]/80">{row.date_paid ?? row.transaction_date ?? '—'}</td>
-                                        <td className="py-2 text-[#1E3A8A]/80">{row.description ?? '—'}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <PaymentHistory transactionHistory={transactionHistory} />
             </section>
 
             {isAdmin && (

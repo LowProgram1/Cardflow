@@ -35,6 +35,7 @@ class ExpenseUpdateRequest extends FormRequest
             'user_id' => ['required', 'integer', 'exists:users,id'],
             'card_id' => ['required', 'integer', 'exists:cards,id'],
             'expense_type_id' => ['nullable', 'integer', 'exists:expense_types,id'],
+            'description' => ['nullable', 'string', 'max:500'],
             'type' => ['nullable', 'in:expense,payment'],
             'payment_type' => ['required', 'in:full,installment'],
             'transaction_date' => ['required', 'date'],

@@ -16,9 +16,9 @@ class ExpenseService implements ExpenseServiceInterface
     ) {
     }
 
-    public function paginateWithRelations(int $perPage = 15, ?int $userId = null): LengthAwarePaginator
+    public function paginateWithRelations(int $perPage = 15, ?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): LengthAwarePaginator
     {
-        return $this->expenses->paginateWithRelations($perPage, $userId);
+        return $this->expenses->paginateWithRelations($perPage, $userId, $adminCreatedOnly, $adminIds);
     }
 
     public function create(array $attributes): Expense

@@ -27,3 +27,29 @@ body {
 .app-data-table table tbody tr:hover {
     background-color: #eff6ff;
 }
+
+/* Center all column headers */
+.app-data-table .rdt_TableCol {
+    text-align: center !important;
+    justify-content: center !important;
+}
+
+/* Center all column data (body cells) */
+.app-data-table .rdt_TableCell {
+    text-align: center !important;
+    justify-content: center !important;
+}
+
+/* Freeze Action column on horizontal scroll (react-data-table-component uses divs) */
+.app-data-table .rdt_TableCol:last-child,
+.app-data-table .rdt_TableCell:last-child {
+    position: sticky !important;
+    right: 0 !important;
+    z-index: 1;
+    background: #fff;
+    box-shadow: -4px 0 6px rgba(0, 0, 0, 0.08);
+}
+.app-data-table .rdt_TableCol:last-child {
+    background: #f8fafc !important;
+    z-index: 2;
+}

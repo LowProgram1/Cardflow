@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 
 class ExpenseRepository implements ExpenseRepositoryInterface
 {
-    public function paginateWithRelations(int $perPage = 15, ?int $userId = null): LengthAwarePaginator
+    public function paginateWithRelations(int $perPage = 15, ?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): LengthAwarePaginator
     {
         $query = Expense::query()
             ->with(['card', 'user', 'expenseType', 'paymentTerm'])
@@ -18,6 +18,10 @@ class ExpenseRepository implements ExpenseRepositoryInterface
 
         if ($userId !== null) {
             $query->where('user_id', $userId);
+        }
+
+        if ($adminCreatedOnly && $adminIds !== null) {
+            $query->adminCreated($adminIds);
         }
 
         return $query->paginate($perPage)->withQueryString();
@@ -41,7 +45,7 @@ class ExpenseRepository implements ExpenseRepositoryInterface
         $expense->delete();
     }
 
-    public function recentWithRelations(int $limit = 10, ?int $userId = null): Collection
+    public function recentWithRelations(int $limit = 10, ?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): Collection
     {
         $query = Expense::query()
             ->with(['card', 'user', 'expenseType', 'paymentTerm'])
@@ -53,10 +57,14 @@ class ExpenseRepository implements ExpenseRepositoryInterface
             $query->where('user_id', $userId);
         }
 
+        if ($adminCreatedOnly && $adminIds !== null) {
+            $query->adminCreated($adminIds);
+        }
+
         return $query->get();
     }
 
-    public function totalByType(?int $userId = null, ?int $cardId = null, ?string $type = null): float
+    public function totalByType(?int $userId = null, ?int $cardId = null, ?string $type = null, bool $adminCreatedOnly = false, ?array $adminIds = null): float
     {
         $query = Expense::query();
 
@@ -72,10 +80,14 @@ class ExpenseRepository implements ExpenseRepositoryInterface
             $query->where('type', $type);
         }
 
+        if ($adminCreatedOnly && $adminIds !== null) {
+            $query->adminCreated($adminIds);
+        }
+
         return (float) $query->sum('amount');
     }
 
-    public function getInstallmentExpenses(?int $userId = null): Collection
+    public function getInstallmentExpenses(?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): Collection
     {
         $query = Expense::query()
             ->with(['card', 'user', 'expenseType', 'paymentTerm'])
@@ -87,10 +99,14 @@ class ExpenseRepository implements ExpenseRepositoryInterface
             $query->where('user_id', $userId);
         }
 
+        if ($adminCreatedOnly && $adminIds !== null) {
+            $query->adminCreated($adminIds);
+        }
+
         return $query->get();
     }
 
-    public function getFullPaymentExpenses(?int $userId = null): Collection
+    public function getFullPaymentExpenses(?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): Collection
     {
         $query = Expense::query()
             ->with(['card', 'user', 'expenseType'])
@@ -102,10 +118,14 @@ class ExpenseRepository implements ExpenseRepositoryInterface
             $query->where('user_id', $userId);
         }
 
+        if ($adminCreatedOnly && $adminIds !== null) {
+            $query->adminCreated($adminIds);
+        }
+
         return $query->get();
     }
 
-    public function getTotalPaidPortion(?int $userId = null): float
+    public function getTotalPaidPortion(?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): float
     {
         $installments = Expense::query()
             ->where('payment_type', 'installment')
@@ -115,6 +135,9 @@ class ExpenseRepository implements ExpenseRepositoryInterface
         if ($userId !== null) {
             $installments->where('user_id', $userId);
         }
+        if ($adminCreatedOnly && $adminIds !== null) {
+            $installments->adminCreated($adminIds);
+        }
         $installments = $installments->get();
 
         $full = Expense::query()
@@ -122,6 +145,9 @@ class ExpenseRepository implements ExpenseRepositoryInterface
             ->where('type', 'expense');
         if ($userId !== null) {
             $full->where('user_id', $userId);
+        }
+        if ($adminCreatedOnly && $adminIds !== null) {
+            $full->adminCreated($adminIds);
         }
         $full = $full->get();
 

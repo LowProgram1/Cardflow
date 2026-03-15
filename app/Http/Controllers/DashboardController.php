@@ -16,7 +16,7 @@ class DashboardController extends Controller
     {
         $user = auth()->user();
         $userId = ($user->role ?? '') === 'admin' ? null : $user->id;
-        $data = $this->dashboard->dashboardData($userId);
+        $data = $this->dashboard->dashboardData($userId, (int) $user->id);
         $data['isAdmin'] = ($user->role ?? '') === 'admin';
 
         return $this->inertia('Dashboard', $data);

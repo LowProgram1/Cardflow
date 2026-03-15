@@ -4,8 +4,8 @@ import { Sidebar, getNavItemsForRole } from './Sidebar';
 import { FlashBanner } from '../ui/FlashBanner';
 import { useInactivityLogout } from '../../hooks/useInactivityLogout';
 
-/** Keys to show in mobile bottom nav (Dashboard, Users, Cards, Expenses). Profile, Settings, Logout live in mobile sidebar. */
-const MOBILE_BOTTOM_NAV_KEYS = ['dashboard', 'users', 'cards', 'expenses'];
+/** Keys to show in mobile bottom nav (Dashboard, Users, Cards, Expenses, Salary). Profile, Settings, Logout live in mobile sidebar. */
+const MOBILE_BOTTOM_NAV_KEYS = ['dashboard', 'users', 'cards', 'expenses', 'salary'];
 
 const SIDEBAR_COLLAPSED_KEY = 'cardflow-sidebar-collapsed';
 
@@ -14,7 +14,8 @@ export function AppLayout({ children }) {
     const userName = props?.auth?.user?.name ?? 'Admin';
     const idleTimeoutMinutes = props?.auth?.idleTimeoutMinutes ?? 5;
     const isAdmin = props?.auth?.isAdmin === true;
-    const allNavItems = getNavItemsForRole(isAdmin);
+    const features = props?.auth?.features ?? [];
+    const allNavItems = getNavItemsForRole(isAdmin, features);
     const mobileNavItems = allNavItems.filter((item) => MOBILE_BOTTOM_NAV_KEYS.includes(item.key));
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -112,6 +113,7 @@ export function AppLayout({ children }) {
                             </div>
                             <div className="flex-1 min-h-0" />
                             <div className="border-t border-[#F3F4F6]/10 px-3 py-4">
+                                <p className="text-[10px] text-[#F3F4F6]/50 uppercase tracking-wider mb-2 px-1" aria-hidden>v1.0.0</p>
                                 <Link
                                     as="button"
                                     method="post"

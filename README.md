@@ -125,6 +125,7 @@ See **[docs/MIGRATION.md](docs/MIGRATION.md)** for the full ordered list and des
 | [docs/MIGRATION.md](docs/MIGRATION.md) | Database migrations: order, how to run, optional seeders. |
 | [docs/SECURITY.md](docs/SECURITY.md) | Web security: headers, rate limiting, session, production checklist. |
 | [docs/CUSTOMIZE_EMAILS.md](docs/CUSTOMIZE_EMAILS.md) | Customizing email templates and verification flow. |
+| [docs/DEPLOY_HOSTINGER.md](docs/DEPLOY_HOSTINGER.md) | Deploy to Hostinger using GitHub (webhook, VPS + Actions, or manual). |
 
 ---
 
