@@ -26,6 +26,11 @@ class CardService implements CardServiceInterface
         return $this->cards->allActive($userId);
     }
 
+    public function allActiveForExpenseLinking(): Collection
+    {
+        return $this->cards->allActiveForExpenseLinking();
+    }
+
     public function create(array $attributes): Card
     {
         return DB::transaction(fn () => $this->cards->create($attributes));
@@ -50,6 +55,12 @@ class CardService implements CardServiceInterface
     public function getStatementMonthsForCard(Card $card): array
     {
         return $this->cards->getStatementMonthsForCard($card);
+    }
+
+    /** @return array<int, array{date: string, description: string, amount: float}> */
+    public function getPaymentHistoryForCard(Card $card, \Carbon\Carbon $from, \Carbon\Carbon $to): array
+    {
+        return $this->cards->getPaymentHistoryForCard($card, $from, $to);
     }
 }
 

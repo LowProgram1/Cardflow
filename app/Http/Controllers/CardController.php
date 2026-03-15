@@ -9,6 +9,7 @@ use App\Http\Requests\Card\CardUpdateRequest;
 use App\Models\Card;
 use App\Models\CardType;
 use App\Services\Contracts\CardServiceInterface;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -25,8 +26,7 @@ class CardController extends Controller
     public function index(): InertiaResponse
     {
         $user = auth()->user();
-        $isAdmin = ($user->role ?? 'admin') === 'admin';
-        $userId = $isAdmin ? null : $user->id;
+        $userId = (int) $user->id;
 
         $result = $this->cards->paginate(10, $userId);
 
@@ -50,8 +50,8 @@ class CardController extends Controller
 
         return $this->inertia('Cards/Index', [
             'cards' => $items,
-            'cardTypes' => $isAdmin ? CardType::query()->orderBy('name')->get(['id', 'name']) : [],
-            'viewOnly' => ! $isAdmin,
+            'cardTypes' => CardType::query()->orderBy('name')->get(['id', 'name']),
+            'viewOnly' => false,
             'pagination' => [
                 'current_page' => $result->currentPage(),
                 'last_page' => $result->lastPage(),
@@ -63,11 +63,8 @@ class CardController extends Controller
 
     public function store(CardStoreRequest $request): RedirectResponse
     {
-        if ((auth()->user()->role ?? 'admin') !== 'admin') {
-            abort(403, 'Only admins can create cards.');
-        }
         $data = $request->validated();
-        $data['user_id'] = auth()->id() ?? 1;
+        $data['user_id'] = (int) auth()->id();
 
         $this->cards->create($data);
 
@@ -79,9 +76,8 @@ class CardController extends Controller
 
     public function update(CardUpdateRequest $request, Card $card): RedirectResponse
     {
-        $user = auth()->user();
-        if (($user->role ?? 'admin') !== 'admin') {
-            abort(403, 'Only admins can edit cards.');
+        if ($card->user_id !== (int) auth()->id()) {
+            abort(403, 'You can only edit your own cards.');
         }
         $data = $request->validated();
         $this->cards->update($card, $data);
@@ -94,8 +90,8 @@ class CardController extends Controller
 
     public function destroy(Card $card): RedirectResponse
     {
-        if ((auth()->user()->role ?? 'admin') !== 'admin') {
-            abort(403, 'Only admins can delete cards.');
+        if ($card->user_id !== (int) auth()->id()) {
+            abort(403, 'You can only delete your own cards.');
         }
         $this->cards->delete($card);
 
@@ -110,8 +106,7 @@ class CardController extends Controller
      */
     public function transactions(Request $request, Card $card): JsonResponse
     {
-        $user = auth()->user();
-        if (($user->role ?? 'admin') !== 'admin' && $card->user_id != $user->id) {
+        if ($card->user_id !== (int) auth()->id()) {
             abort(403, 'You can only view transactions for your own cards.');
         }
         $month = $request->input('month');
@@ -152,8 +147,7 @@ class CardController extends Controller
      */
     public function statementMonths(Card $card): JsonResponse
     {
-        $user = auth()->user();
-        if (($user->role ?? 'admin') !== 'admin' && $card->user_id != $user->id) {
+        if ($card->user_id !== (int) auth()->id()) {
             abort(403, 'You can only view statement months for your own cards.');
         }
         $months = $this->cards->getStatementMonthsForCard($card);
@@ -166,8 +160,7 @@ class CardController extends Controller
      */
     public function statement(Request $request, Card $card)
     {
-        $user = auth()->user();
-        if (($user->role ?? 'admin') !== 'admin' && $card->user_id != $user->id) {
+        if ($card->user_id !== (int) auth()->id()) {
             abort(403, 'You can only view statements for your own cards.');
         }
         $card->load('user');
@@ -197,15 +190,78 @@ class CardController extends Controller
             ];
         });
 
+        $paymentHistoryRaw = $this->cards->getPaymentHistoryForCard($card, $from, $to);
+        $paymentHistory = array_map(function ($row) {
+            $row['formatted_amount'] = CurrencyHelper::formatCurrency($row['amount']);
+
+            return $row;
+        }, $paymentHistoryRaw);
+
         return view('cards.statement', [
             'card' => $card,
             'userName' => $userName,
             'transactions' => $rows,
+            'paymentHistory' => $paymentHistory,
             'periodStart' => $from->format('M j, Y'),
             'periodEnd' => $to->format('M j, Y'),
             'dueDateLabel' => $dueDateLabel,
             'statementMonth' => $month,
         ]);
+    }
+
+    /**
+     * Statement of Account as PDF (A4), for display in modal or download.
+     */
+    public function statementPdf(Request $request, Card $card)
+    {
+        if ($card->user_id !== (int) auth()->id()) {
+            abort(403, 'You can only view statements for your own cards.');
+        }
+        $card->load('user');
+        $month = $request->input('month', now()->format('Y-m'));
+        $statementDay = (int) ($card->statement_day ?? 1);
+        $statementDay = max(1, min(31, $statementDay));
+
+        [$from, $to] = StatementPeriodHelper::periodForYearMonth($month, $statementDay);
+        $transactions = $this->cards->getTransactionsForCard($card, $from, $to);
+
+        $userName = $card->user?->name ?? 'Cardholder';
+        $dueDay = $card->due_day;
+        $dueDateLabel = '—';
+        if ($dueDay) {
+            $periodEnd = $to->copy();
+            $dueDate = $periodEnd->copy()->addMonth()->day(min($dueDay, $periodEnd->copy()->addMonth()->daysInMonth));
+            $dueDateLabel = $dueDate->format('F j, Y');
+        }
+
+        $rows = $transactions->map(function ($expense) {
+            return [
+                'date' => $expense->transaction_date?->format('M j, Y'),
+                'description' => $expense->description ?? $expense->expenseType?->name ?? '—',
+                'type' => $expense->type,
+                'amount' => (float) $expense->amount,
+                'formatted_amount' => CurrencyHelper::formatCurrency((float) $expense->amount),
+            ];
+        });
+
+        $paymentHistoryRaw = $this->cards->getPaymentHistoryForCard($card, $from, $to);
+        $paymentHistory = array_map(function ($row) {
+            $row['formatted_amount'] = CurrencyHelper::formatCurrency($row['amount']);
+
+            return $row;
+        }, $paymentHistoryRaw);
+
+        $pdf = Pdf::loadView('cards.statement-pdf', [
+            'card' => $card,
+            'userName' => $userName,
+            'transactions' => $rows,
+            'paymentHistory' => $paymentHistory,
+            'periodStart' => $from->format('M j, Y'),
+            'periodEnd' => $to->format('M j, Y'),
+            'dueDateLabel' => $dueDateLabel,
+        ])->setPaper('a4');
+
+        return $pdf->stream('statement-' . $month . '.pdf');
     }
 }
 

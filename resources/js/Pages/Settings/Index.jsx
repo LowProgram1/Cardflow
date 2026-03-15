@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppLayout } from '../../components/layout/AppLayout';
 import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
@@ -8,6 +8,8 @@ import { PasswordInput } from '../../components/ui/PasswordInput';
 import { PasswordStrengthIndicator } from '../../components/ui/PasswordStrengthIndicator';
 import { PasswordConfirmationHint } from '../../components/ui/PasswordConfirmationHint';
 import { AppDataTable } from '../../components/ui/DataTable';
+import { AddButton } from '../../components/ui/AddButton';
+import { FeatureManager } from '../../components/FeatureManager';
 import { useForm, Link, usePage, router } from '@inertiajs/react';
 
 function ProfileForm({ user, isAdmin, faviconUrl }) {
@@ -49,7 +51,7 @@ function ProfileForm({ user, isAdmin, faviconUrl }) {
                     className="w-full rounded-lg bg-[#F3F4F6] border border-[#1E3A8A]/20 px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                     value={data.password}
                     onChange={(e) => setData('password', e.target.value)}
-                    placeholder="Min 10 chars, upper & lower case, number, symbol"
+                    placeholder="Min 12 chars, upper & lower case, number, symbol"
                 />
                 <PasswordStrengthIndicator password={data.password} showOnlyWhenFilled />
                 {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
@@ -225,10 +227,10 @@ function CardTypesSection({ cardTypes, onRequestDelete, openModal }) {
             name: 'Actions',
             cell: (row) => (
                 <div className="flex items-center justify-end gap-1">
-                    <button type="button" onClick={() => openEdit(row)} className="p-1.5 rounded-lg text-[#2563EB] hover:bg-[#2563EB]/10" title="Edit">
+                    <button type="button" onClick={() => openEdit(row)} className="p-2 rounded-lg text-[#2563EB] hover:bg-[#2563EB]/10 hover:text-[#1E3A8A]" title="Edit" aria-label="Edit card type">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
-                    <button type="button" onClick={() => onRequestDelete?.(`/card-types/${row.id}`, 'Delete card type')} className="p-1.5 rounded-lg text-red-600 hover:bg-red-50" title="Remove">
+                    <button type="button" onClick={() => onRequestDelete?.(`/card-types/${row.id}`, 'Delete card type')} className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700" title="Remove" aria-label="Remove card type">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V7a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                 </div>
@@ -240,30 +242,19 @@ function CardTypesSection({ cardTypes, onRequestDelete, openModal }) {
 
     return (
         <>
-            <div className="flex items-center justify-between mb-4">
-                <p className="text-sm text-[#1E3A8A]/70">Manage card types (e.g. VISA, Mastercard) for the credit card form.</p>
-                <button
-                    onClick={openCreate}
-                    className="inline-flex items-center rounded-lg bg-[#2563EB] px-3 py-1.5 text-sm font-medium text-[#F3F4F6] hover:bg-[#1E3A8A]"
-                >
-                    + New card type
-                </button>
-            </div>
-
-            {!cardTypes?.length ? (
-                <div className="rounded-2xl border border-[#1E3A8A]/20 bg-[#E5E7EB] border-dashed p-12 text-center">
-                    <p className="text-sm text-[#1E3A8A]/60">No card types yet.</p>
-                    <p className="text-sm text-[#1E3A8A]/50 mt-1">Add VISA, Mastercard, etc. to use in the credit card form.</p>
-                    <button
-                        onClick={openCreate}
-                        className="mt-4 inline-flex items-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-medium text-[#F3F4F6] hover:bg-[#1E3A8A]"
-                    >
-                        + New card type
-                    </button>
-                </div>
-            ) : (
-                <AppDataTable columns={columns} data={cardTypes} searchPlaceholder="Search card types..." />
-            )}
+            <AppDataTable
+                title="Card types"
+                actions={<AddButton onClick={openCreate} ariaLabel="New card type">Add</AddButton>}
+                columns={columns}
+                data={cardTypes}
+                searchPlaceholder="Search card types..."
+                emptyContent={
+                    <div className="rounded-xl border border-[#1E3A8A]/20 border-dashed bg-[#E5E7EB]/50 p-8 text-center">
+                        <p className="text-sm text-[#1E3A8A]/60">No card types yet.</p>
+                        <p className="text-sm text-[#1E3A8A]/50 mt-1">Add VISA, Mastercard, etc. to use in the credit card form.</p>
+                    </div>
+                }
+            />
 
             <Modal
                 title={modalState.cardType ? 'Edit card type' : 'New card type'}
@@ -335,10 +326,10 @@ function ExpenseTypesSection({ expenseTypes, onRequestDelete, openModal }) {
             name: 'Actions',
             cell: (row) => (
                 <div className="flex items-center justify-end gap-1">
-                    <button type="button" onClick={() => openEdit(row)} className="p-1.5 rounded-lg text-[#2563EB] hover:bg-[#2563EB]/10" title="Edit">
+                    <button type="button" onClick={() => openEdit(row)} className="p-2 rounded-lg text-[#2563EB] hover:bg-[#2563EB]/10 hover:text-[#1E3A8A]" title="Edit" aria-label="Edit expense type">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
-                    <button type="button" onClick={() => onRequestDelete?.(`/expense-types/${row.id}`, 'Delete expense type')} className="p-1.5 rounded-lg text-red-600 hover:bg-red-50" title="Remove">
+                    <button type="button" onClick={() => onRequestDelete?.(`/expense-types/${row.id}`, 'Delete expense type')} className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700" title="Remove" aria-label="Remove expense type">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V7a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                 </div>
@@ -350,20 +341,19 @@ function ExpenseTypesSection({ expenseTypes, onRequestDelete, openModal }) {
 
     return (
         <>
-            <div className="flex items-center justify-between mb-4">
-                <p className="text-sm text-[#1E3A8A]/70">Manage types of expense (e.g. Airlines, Hotel, Restaurant, Grocery) for the expense form.</p>
-                <button onClick={() => setModalState({ open: true, item: null })} className="inline-flex items-center rounded-lg bg-[#2563EB] px-3 py-1.5 text-sm font-medium text-[#F3F4F6] hover:bg-[#1E3A8A]">
-                    + New expense type
-                </button>
-            </div>
-            {!expenseTypes?.length ? (
-                <div className="rounded-2xl border border-[#1E3A8A]/20 bg-[#E5E7EB] border-dashed p-12 text-center">
-                    <p className="text-sm text-[#1E3A8A]/60">No expense types yet.</p>
-                    <button onClick={() => setModalState({ open: true, item: null })} className="mt-4 inline-flex items-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-medium text-[#F3F4F6] hover:bg-[#1E3A8A]">+ New expense type</button>
-                </div>
-            ) : (
-                <AppDataTable columns={columns} data={expenseTypes} searchPlaceholder="Search expense types..." />
-            )}
+            <AppDataTable
+                title="Expense types"
+                actions={<AddButton onClick={() => setModalState({ open: true, item: null })} ariaLabel="New expense type">Add</AddButton>}
+                columns={columns}
+                data={expenseTypes}
+                searchPlaceholder="Search expense types..."
+                emptyContent={
+                    <div className="rounded-xl border border-[#1E3A8A]/20 border-dashed bg-[#E5E7EB]/50 p-8 text-center">
+                        <p className="text-sm text-[#1E3A8A]/60">No expense types yet.</p>
+                        <p className="text-sm text-[#1E3A8A]/50 mt-1">Add Airlines, Hotel, Restaurant, Grocery, etc. for the expense form.</p>
+                    </div>
+                }
+            />
             <Modal title={modalState.item ? 'Edit expense type' : 'New expense type'} open={modalState.open} onClose={() => setModalState({ open: false, item: null })}>
                 <ExpenseTypeForm initialData={modalState.item} isEdit={!!modalState.item} onClose={() => setModalState({ open: false, item: null })} />
             </Modal>
@@ -429,10 +419,10 @@ function PaymentTermsSection({ paymentTerms, onRequestDelete, openModal }) {
             name: 'Actions',
             cell: (row) => (
                 <div className="flex items-center justify-end gap-1">
-                    <button type="button" onClick={() => openEdit(row)} className="p-1.5 rounded-lg text-[#2563EB] hover:bg-[#2563EB]/10" title="Edit">
+                    <button type="button" onClick={() => openEdit(row)} className="p-2 rounded-lg text-[#2563EB] hover:bg-[#2563EB]/10 hover:text-[#1E3A8A]" title="Edit" aria-label="Edit payment term">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
-                    <button type="button" onClick={() => onRequestDelete?.(`/payment-terms/${row.id}`, 'Delete payment term')} className="p-1.5 rounded-lg text-red-600 hover:bg-red-50" title="Remove">
+                    <button type="button" onClick={() => onRequestDelete?.(`/payment-terms/${row.id}`, 'Delete payment term')} className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700" title="Remove" aria-label="Remove payment term">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V7a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                 </div>
@@ -444,20 +434,19 @@ function PaymentTermsSection({ paymentTerms, onRequestDelete, openModal }) {
 
     return (
         <>
-            <div className="flex items-center justify-between mb-4">
-                <p className="text-sm text-[#1E3A8A]/70">Manage number of terms for installment (e.g. 3, 6, 9, 12 months).</p>
-                <button onClick={() => setModalState({ open: true, item: null })} className="inline-flex items-center rounded-lg bg-[#2563EB] px-3 py-1.5 text-sm font-medium text-[#F3F4F6] hover:bg-[#1E3A8A]">
-                    + New payment term
-                </button>
-            </div>
-            {!paymentTerms?.length ? (
-                <div className="rounded-2xl border border-[#1E3A8A]/20 bg-[#E5E7EB] border-dashed p-12 text-center">
-                    <p className="text-sm text-[#1E3A8A]/60">No payment terms yet.</p>
-                    <button onClick={() => setModalState({ open: true, item: null })} className="mt-4 inline-flex items-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-medium text-[#F3F4F6] hover:bg-[#1E3A8A]">+ New payment term</button>
-                </div>
-            ) : (
-                <AppDataTable columns={columns} data={paymentTerms} searchPlaceholder="Search payment terms..." />
-            )}
+            <AppDataTable
+                title="Payment terms"
+                actions={<AddButton onClick={() => setModalState({ open: true, item: null })} ariaLabel="New payment term">Add</AddButton>}
+                columns={columns}
+                data={paymentTerms}
+                searchPlaceholder="Search payment terms..."
+                emptyContent={
+                    <div className="rounded-xl border border-[#1E3A8A]/20 border-dashed bg-[#E5E7EB]/50 p-8 text-center">
+                        <p className="text-sm text-[#1E3A8A]/60">No payment terms yet.</p>
+                        <p className="text-sm text-[#1E3A8A]/50 mt-1">Add 3, 6, 9, 12 months, etc. for installment options.</p>
+                    </div>
+                }
+            />
             <Modal title={modalState.item ? 'Edit payment term' : 'New payment term'} open={modalState.open} onClose={() => setModalState({ open: false, item: null })}>
                 <PaymentTermForm initialData={modalState.item} isEdit={!!modalState.item} onClose={() => setModalState({ open: false, item: null })} />
             </Modal>
@@ -471,6 +460,12 @@ export default function SettingsIndex() {
     const openModal = props?.openModal ?? null;
     const [deleteConfirm, setDeleteConfirm] = useState({ open: false, url: null, title: 'Confirm delete' });
 
+    useEffect(() => {
+        if (!isAdmin && section === 'features') {
+            router.get('/settings', { section: 'profile' }, { preserveState: false });
+        }
+    }, [isAdmin, section]);
+
     const handleDeleteConfirm = () => {
         if (deleteConfirm.url) {
             router.delete(deleteConfirm.url, { preserveScroll: true });
@@ -481,6 +476,7 @@ export default function SettingsIndex() {
     const sections = [
         { key: 'profile', label: 'Profile', href: '/settings?section=profile' },
         ...(isAdmin ? [
+            { key: 'features', label: 'Features', href: '/settings?section=features' },
             { key: 'card-types', label: 'Card types', href: '/settings?section=card-types' },
             { key: 'expense-types', label: 'Expense types', href: '/settings?section=expense-types' },
             { key: 'payment-terms', label: 'Payment terms', href: '/settings?section=payment-terms' },
@@ -517,6 +513,14 @@ export default function SettingsIndex() {
                     <p className="text-xs text-[#1E3A8A]/60 mb-3">Your profile is linked to your user account. You can change your name and password below; email is displayed but cannot be edited.</p>
                     <ProfileForm user={user} isAdmin={isAdmin} faviconUrl={props.favicon_url} />
                     {isAdmin && <FaviconForm faviconUrl={props.favicon_url} />}
+                </div>
+            )}
+
+            {section === 'features' && isAdmin && (
+                <div>
+                    <h2 className="text-sm font-semibold text-[#1E3A8A] mb-1">Feature access</h2>
+                    <p className="text-xs text-[#1E3A8A]/60 mb-3">Enable or disable features for your account. Changes apply after you save.</p>
+                    <FeatureManager userId={props?.auth?.user?.id} />
                 </div>
             )}
 

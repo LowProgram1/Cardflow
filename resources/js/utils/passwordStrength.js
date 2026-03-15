@@ -1,6 +1,6 @@
 /**
  * Password strength calculation aligned with backend rules:
- * min 10 chars, letters, mixed case, numbers, symbols.
+ * min 12 chars, letters, mixed case, numbers, symbols.
  *
  * @param {string} password
  * @returns {{ level: 'weak'|'fair'|'good'|'strong', score: number, label: string, color: string, segmentCount: number }}
@@ -17,7 +17,7 @@ export function getPasswordStrength(password) {
     const hasSymbol = /[^A-Za-z0-9]/.test(password);
 
     let score = 0;
-    if (len >= 10) score += 1;
+    if (len >= 12) score += 1;
     if (hasLower && hasUpper) score += 1;
     if (hasNumber) score += 1;
     if (hasSymbol) score += 1;

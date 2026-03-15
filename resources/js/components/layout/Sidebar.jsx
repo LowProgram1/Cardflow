@@ -1,8 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, usePage } from '@inertiajs/react';
 
-/** Navigation config: keys visible only to admin (hidden from client/user). */
-const ADMIN_ONLY_NAV_KEYS = ['users', 'expenses'];
+/** Navigation config: keys visible only to admin (hidden from client/user). Clients can see Expenses if they have expense_tracker feature. */
+const ADMIN_ONLY_NAV_KEYS = ['users'];
+
+/**
+ * F-ACS: nav key -> feature name. If user lacks the feature, the NavLink is hidden.
+ * Omit requiredFeature for items that don't require a feature.
+ */
+const NAV_KEY_TO_FEATURE = {
+    expenses: 'expense_tracker',
+    salary: 'salary_monitoring',
+    cards: 'cards',
+};
+
+/** Sub-nav for Salary (desktop): Payments, then Categories. */
+export const SALARY_SUB_NAV = [
+    { name: 'Payments', href: '/salary?section=payments', key: 'salary-payments' },
+    { name: 'Categories', href: '/salary?section=classes-rates', key: 'salary-classes-rates' },
+];
 
 /** All sidebar items in display order. Exported for mobile bottom nav. */
 export const ALL_NAV_ITEMS = [
@@ -40,9 +56,22 @@ export const ALL_NAV_ITEMS = [
         name: 'Expenses',
         href: '/expenses',
         key: 'expenses',
+        requiredFeature: 'expense_tracker',
         icon: (
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+        ),
+    },
+    {
+        name: 'Salary',
+        href: '/salary',
+        key: 'salary',
+        requiredFeature: 'salary_monitoring',
+        children: SALARY_SUB_NAV,
+        icon: (
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
         ),
     },
@@ -60,13 +89,23 @@ export const ALL_NAV_ITEMS = [
 ];
 
 /**
- * Returns nav items to display based on role: admin sees all, client/user sees only Dashboard, Cards, Settings.
- * @param {boolean} isAdmin - From shared auth.isAdmin (backend is source of truth).
+ * Returns nav items to display based on role and F-ACS features.
+ * - Role: admin sees all; non-admin hides ADMIN_ONLY_NAV_KEYS.
+ * - Features: items with requiredFeature are shown only when the user has that feature.
+ *   If the user has no features (empty array), feature-gated items (e.g. Salary, Expenses) are hidden.
+ * @param {boolean} isAdmin - From shared auth.isAdmin.
+ * @param {string[]} [features] - From shared auth.features (feature names).
  * @returns {typeof ALL_NAV_ITEMS}
  */
-export function getNavItemsForRole(isAdmin) {
-    if (isAdmin) return ALL_NAV_ITEMS;
-    return ALL_NAV_ITEMS.filter((item) => !ADMIN_ONLY_NAV_KEYS.includes(item.key));
+export function getNavItemsForRole(isAdmin, features = []) {
+    let items = isAdmin ? ALL_NAV_ITEMS : ALL_NAV_ITEMS.filter((item) => !ADMIN_ONLY_NAV_KEYS.includes(item.key));
+    const featureSet = Array.isArray(features) ? new Set(features) : new Set();
+    items = items.filter((item) => {
+        const requiredFeature = item.requiredFeature ?? NAV_KEY_TO_FEATURE[item.key];
+        if (!requiredFeature) return true;
+        return featureSet.has(requiredFeature);
+    });
+    return items;
 }
 
 export function Sidebar({ isCollapsed = false, isMobileOpen = false, onClose }) {
@@ -75,7 +114,29 @@ export function Sidebar({ isCollapsed = false, isMobileOpen = false, onClose }) 
     const isAdmin = auth?.isAdmin === true;
     const userName = auth?.user?.name ?? 'User';
     const faviconUrl = props?.favicon_url ?? null;
-    const navItemsFiltered = getNavItemsForRole(isAdmin);
+    const features = auth?.features ?? [];
+    const navItemsFiltered = getNavItemsForRole(isAdmin, features);
+    const fullUrl = typeof url === 'string' ? url : '';
+    const pathname = (fullUrl.startsWith('/') ? fullUrl : fullUrl.replace(/^https?:\/\/[^/]+/, '')).split('?')[0] || (typeof window !== 'undefined' ? window.location.pathname : '');
+    const isSalaryPage = pathname === '/salary' || pathname.startsWith('/salary/');
+    const [salaryExpandedManually, setSalaryExpandedManually] = useState(false);
+    const [salaryCollapsedOnSalaryPage, setSalaryCollapsedOnSalaryPage] = useState(false);
+
+    useEffect(() => {
+        if (!isSalaryPage) setSalaryCollapsedOnSalaryPage(false);
+    }, [isSalaryPage]);
+
+    const salaryExpanded = isSalaryPage
+        ? !salaryCollapsedOnSalaryPage
+        : salaryExpandedManually;
+
+    const toggleSalaryExpanded = () => {
+        if (isSalaryPage) {
+            setSalaryCollapsedOnSalaryPage((v) => !v);
+        } else {
+            setSalaryExpandedManually((v) => !v);
+        }
+    };
 
     const aside = (
         <aside
@@ -135,33 +196,78 @@ export function Sidebar({ isCollapsed = false, isMobileOpen = false, onClose }) 
             </div>
             <nav className="px-3 py-4 space-y-1 flex-1 overflow-y-auto bg-[#1E3A8A]">
                 {navItemsFiltered.map((item) => {
-                    const active = item.href === '/' ? url === '/' : url.startsWith(item.href);
+                    const isSalary = item.key === 'salary';
+                    const hasChildren = !!(item.children && item.children.length);
                     const iconsOnly = isCollapsed || isMobileOpen;
+                    const showChildren = hasChildren && !iconsOnly && salaryExpanded;
+                    const active = item.href === '/' ? pathname === '/' : (isSalary ? isSalaryPage : pathname === item.href || pathname.startsWith(item.href + '?') || pathname.startsWith(item.href + '/'));
+
+                    if (isSalary && hasChildren && !iconsOnly) {
+                        return (
+                            <div key={item.key} className="space-y-0.5">
+                                <button
+                                    type="button"
+                                    onClick={toggleSalaryExpanded}
+                                    className={[
+                                        'flex w-full items-center rounded-lg px-3 py-2.5 text-sm transition-colors text-left',
+                                        'gap-3',
+                                        active
+                                            ? 'bg-[#F3F4F6]/10 text-[#F3F4F6] border border-[#F3F4F6]/20'
+                                            : 'text-[#F3F4F6]/90 hover:bg-[#F3F4F6]/10 hover:text-[#F3F4F6] border border-transparent',
+                                    ].join(' ')}
+                                >
+                                    <span className="shrink-0">{item.icon}</span>
+                                    <span className="truncate flex-1">{item.name}</span>
+                                    <svg className={`w-4 h-4 shrink-0 transition-transform ${salaryExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
+                                {showChildren && item.children.map((sub) => {
+                                    const subActive = url.includes(sub.key === 'salary-payments' ? 'section=payments' : 'section=classes-rates');
+                                    return (
+                                        <Link
+                                            key={sub.key}
+                                            href={sub.href}
+                                            className={[
+                                                'flex items-center rounded-lg py-2 pl-8 pr-3 text-sm transition-colors border border-transparent ml-2',
+                                                subActive ? 'bg-[#F3F4F6]/10 text-[#F3F4F6]' : 'text-[#F3F4F6]/80 hover:bg-[#F3F4F6]/5 hover:text-[#F3F4F6]',
+                                            ].join(' ')}
+                                        >
+                                            <span className="truncate">{sub.name}</span>
+                                            {subActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#F3F4F6] shrink-0" />}
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        );
+                    }
 
                     return (
-                        <Link
-                            key={item.key}
-                            href={item.href}
-                            onClick={isMobileOpen ? onClose : undefined}
-                            className={[
-                                'flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors',
-                                iconsOnly ? 'justify-center px-2' : 'gap-3',
-                                active
-                                    ? 'bg-[#F3F4F6]/10 text-[#F3F4F6] border border-[#F3F4F6]/20'
-                                    : 'text-[#F3F4F6]/90 hover:bg-[#F3F4F6]/10 hover:text-[#F3F4F6] border border-transparent',
-                            ].join(' ')}
-                            title={iconsOnly ? item.name : undefined}
-                        >
-                            <span className="shrink-0">{item.icon}</span>
-                            {!iconsOnly && <span className="truncate">{item.name}</span>}
-                            {!iconsOnly && active && (
-                                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#F3F4F6] shrink-0" />
-                            )}
-                        </Link>
+                        <div key={item.key}>
+                            <Link
+                                href={item.href}
+                                onClick={isMobileOpen ? onClose : undefined}
+                                className={[
+                                    'flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors',
+                                    iconsOnly ? 'justify-center px-2' : 'gap-3',
+                                    active
+                                        ? 'bg-[#F3F4F6]/10 text-[#F3F4F6] border border-[#F3F4F6]/20'
+                                        : 'text-[#F3F4F6]/90 hover:bg-[#F3F4F6]/10 hover:text-[#F3F4F6] border border-transparent',
+                                ].join(' ')}
+                                title={iconsOnly ? item.name : undefined}
+                            >
+                                <span className="shrink-0">{item.icon}</span>
+                                {!iconsOnly && <span className="truncate">{item.name}</span>}
+                                {!iconsOnly && active && (
+                                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#F3F4F6] shrink-0" />
+                                )}
+                            </Link>
+                        </div>
                     );
                 })}
             </nav>
             <div className="border-t border-[#1E3A8A] px-3 py-3 shrink-0 bg-[#1E3A8A]">
+                <p className="text-[10px] text-[#F3F4F6]/50 uppercase tracking-wider mb-1.5 px-3" aria-hidden>v1.0.0</p>
                 <Link
                     as="button"
                     method="post"

@@ -15,8 +15,8 @@ class AdminUserSeeder extends Seeder
     public function run(): void
     {
         $email = config('app.env') === 'production'
-            ? (env('ADMIN_EMAIL') ?: 'admin@yourdomain.com')
-            : (env('ADMIN_EMAIL') ?: 'admin@yourdomain.com');
+            ? (env('ADMIN_EMAIL') ?: 'cardflow.no.reply@gmail.com')
+            : (env('ADMIN_EMAIL') ?: 'cardflow.no.reply@gmail.com');
 
         $password = env('ADMIN_PASSWORD');
         if (empty($password)) {

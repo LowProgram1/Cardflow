@@ -8,7 +8,7 @@ use Illuminate\Support\Collection;
 
 interface ExpenseRepositoryInterface
 {
-    public function paginateWithRelations(int $perPage = 15, ?int $userId = null): LengthAwarePaginator;
+    public function paginateWithRelations(int $perPage = 15, ?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): LengthAwarePaginator;
 
     public function create(array $attributes): Expense;
 
@@ -16,9 +16,9 @@ interface ExpenseRepositoryInterface
 
     public function delete(Expense $expense): void;
 
-    public function recentWithRelations(int $limit = 10, ?int $userId = null): Collection;
+    public function recentWithRelations(int $limit = 10, ?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): Collection;
 
-    public function totalByType(?int $userId = null, ?int $cardId = null, ?string $type = null): float;
+    public function totalByType(?int $userId = null, ?int $cardId = null, ?string $type = null, bool $adminCreatedOnly = false, ?array $adminIds = null): float;
 
     /**
      * Get all installment expenses with relations for dashboard summary.
@@ -26,7 +26,7 @@ interface ExpenseRepositoryInterface
      * @param  int|null  $userId  When set, scope to this user.
      * @return \Illuminate\Support\Collection<Expense>
      */
-    public function getInstallmentExpenses(?int $userId = null): Collection;
+    public function getInstallmentExpenses(?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): Collection;
 
     /**
      * Get all full-payment expenses (type=expense, payment_type=full) for dashboard.
@@ -34,7 +34,7 @@ interface ExpenseRepositoryInterface
      * @param  int|null  $userId  When set, scope to this user.
      * @return \Illuminate\Support\Collection<Expense>
      */
-    public function getFullPaymentExpenses(?int $userId = null): Collection;
+    public function getFullPaymentExpenses(?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): Collection;
 
     /**
      * Sum of "paid" portions: for installment (paid_months count × monthly_amortization) + for full (amount if paid).
@@ -42,6 +42,6 @@ interface ExpenseRepositoryInterface
      *
      * @param  int|null  $userId  When set, scope to this user.
      */
-    public function getTotalPaidPortion(?int $userId = null): float;
+    public function getTotalPaidPortion(?int $userId = null, bool $adminCreatedOnly = false, ?array $adminIds = null): float;
 }
 

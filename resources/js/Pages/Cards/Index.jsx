@@ -3,6 +3,7 @@ import { AppLayout } from '../../components/layout/AppLayout';
 import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { FormValidationSummary } from '../../components/ui/FormValidationSummary';
+import { AddButton } from '../../components/ui/AddButton';
 import { useForm, usePage, router } from '@inertiajs/react';
 
 function CardForm({ initialData, onClose, isEdit, cardTypes = [] }) {
@@ -191,10 +192,8 @@ export default function CardsIndex() {
     const [modalState, setModalState] = useState({ open: false, card: null });
     const [deleteConfirm, setDeleteConfirm] = useState({ open: false, url: null });
     const [viewModalCard, setViewModalCard] = useState(null);
-    const [transactions, setTransactions] = useState([]);
     const [statementMonthsList, setStatementMonthsList] = useState([]);
-    const [statementMonth, setStatementMonth] = useState(getCurrentStatementMonth());
-    const [loadingTransactions, setLoadingTransactions] = useState(false);
+    const [statementPdfModal, setStatementPdfModal] = useState({ open: false, cardId: null, month: null, label: '' });
 
     const openModal = props?.openModal;
     useEffect(() => {
@@ -210,38 +209,16 @@ export default function CardsIndex() {
 
     useEffect(() => {
         if (!viewModalCard?.id) {
-            setTransactions([]);
             setStatementMonthsList([]);
             return;
         }
-        setTransactions([]);
-        setLoadingTransactions(true);
-        const params = new URLSearchParams({ month: statementMonth });
-        fetch(`/cards/${viewModalCard.id}/transactions?${params}`, {
-            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin',
-        })
-            .then((res) => res.json())
-            .then((data) => {
-                setTransactions(data.transactions ?? []);
-            })
-            .catch(() => setTransactions([]))
-            .finally(() => setLoadingTransactions(false));
-    }, [viewModalCard?.id, statementMonth]);
-
-    useEffect(() => {
-        if (!viewModalCard?.id) return;
         fetch(`/cards/${viewModalCard.id}/statement-months`, {
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin',
         })
             .then((res) => res.json())
             .then((data) => {
-                const list = data.statement_months ?? [];
-                setStatementMonthsList(list);
-                if (list.length > 0 && !list.some((m) => m.value === statementMonth)) {
-                    setStatementMonth(list[0].value);
-                }
+                setStatementMonthsList(data.statement_months ?? []);
             })
             .catch(() => setStatementMonthsList([]));
     }, [viewModalCard?.id]);
@@ -266,14 +243,8 @@ export default function CardsIndex() {
         setModalState({ open: true, card });
     };
     const closeModal = () => setModalState({ open: false, card: null });
-    const openViewModal = (card) => {
-        setViewModalCard(card);
-        setStatementMonth(getCurrentStatementMonth());
-    };
-    const closeViewModal = () => {
-        setViewModalCard(null);
-        setTransactions([]);
-    };
+    const openViewModal = (card) => setViewModalCard(card);
+    const closeViewModal = () => setViewModalCard(null);
     const statementUrl = (cardId, month) => `/cards/${cardId}/statement?month=${month || getCurrentStatementMonth()}`;
 
     return (
@@ -285,12 +256,7 @@ export default function CardsIndex() {
                             {viewOnly ? 'Transactions & statements' : 'Manage Credit Cards'}
                         </h1>
                         {!viewOnly && (
-                        <button
-                            onClick={openCreate}
-                            className="inline-flex items-center rounded-lg bg-[#2563EB] px-3 py-1.5 text-sm font-medium text-[#F3F4F6] hover:bg-[#1E3A8A] shrink-0"
-                        >
-                            + New card
-                        </button>
+                        <AddButton onClick={openCreate} ariaLabel="New card" className="shrink-0">Add card</AddButton>
                         )}
                     </div>
                     <p className="text-sm text-[#1E3A8A]/70 mt-1">
@@ -348,12 +314,7 @@ export default function CardsIndex() {
                 <div className="rounded-2xl border border-[#1E3A8A]/20 bg-[#E5E7EB] border-dashed p-12 text-center">
                     <p className="text-sm text-[#1E3A8A]/60">No cards yet.</p>
                     <p className="text-sm text-[#1E3A8A]/50 mt-1">Add your first credit card to get started.</p>
-                    <button
-                        onClick={openCreate}
-                        className="mt-4 inline-flex items-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-medium text-[#F3F4F6] hover:bg-[#1E3A8A]"
-                    >
-                        + New card
-                    </button>
+                    <AddButton onClick={openCreate} ariaLabel="New card" className="mt-4">+ New card</AddButton>
                 </div>
             ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -416,7 +377,7 @@ export default function CardsIndex() {
                                     <button
                                         type="button"
                                         onClick={() => openViewModal(card)}
-                                        className="p-1.5 rounded-lg text-[#1E3A8A]/70 hover:bg-[#1E3A8A]/10 hover:text-[#1E3A8A]"
+                                        className="p-2 rounded-lg text-[#1E3A8A]/70 hover:bg-[#1E3A8A]/10 hover:text-[#1E3A8A]"
                                         title="View transactions"
                                         aria-label="View transactions"
                                     >
@@ -428,7 +389,7 @@ export default function CardsIndex() {
                                     <button
                                         type="button"
                                         onClick={(e) => openEdit(card, e)}
-                                        className="p-1.5 rounded-lg text-[#2563EB] hover:bg-[#2563EB]/10 hover:text-[#1E3A8A]"
+                                        className="p-2 rounded-lg text-[#2563EB] hover:bg-[#2563EB]/10 hover:text-[#1E3A8A]"
                                         title="Edit"
                                         aria-label="Edit card"
                                     >
@@ -439,7 +400,7 @@ export default function CardsIndex() {
                                     <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ open: true, url: `/cards/${card.id}` }); }}
-                                        className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700"
+                                        className="p-2 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700"
                                         title="Remove"
                                         aria-label="Remove card"
                                     >
@@ -476,65 +437,20 @@ export default function CardsIndex() {
                                 ) : (
                                     statementMonthsList.map((opt) => (
                                         <li key={opt.value}>
-                                            <a
-                                                href={statementUrl(viewModalCard.id, opt.value)}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
+                                            <button
+                                                type="button"
+                                                onClick={() => setStatementPdfModal({ open: true, cardId: viewModalCard.id, month: opt.value, label: opt.label })}
                                                 className="inline-flex items-center gap-2 rounded px-2 py-1 text-xs text-[#2563EB] hover:bg-[#2563EB]/10 hover:text-[#1E3A8A]"
                                             >
                                                 <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                 </svg>
                                                 {opt.label} Statement
-                                            </a>
+                                            </button>
                                         </li>
                                     ))
                                 )}
                             </ul>
-                        </div>
-
-                        {/* Transaction history */}
-                        <div>
-                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                                <span className="text-sm font-semibold text-[#1E3A8A]">Transaction history</span>
-                                <label className="inline-flex items-center gap-2 text-xs text-[#1E3A8A]">
-                                    <span>Month:</span>
-                                    <input
-                                        type="month"
-                                        value={statementMonth}
-                                        onChange={(e) => setStatementMonth(e.target.value)}
-                                        className="rounded-lg border border-[#1E3A8A]/20 px-2 py-1 text-[#1E3A8A] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
-                                    />
-                                </label>
-                            </div>
-                            <div className="rounded-lg border border-[#1E3A8A]/20 overflow-hidden">
-                                {loadingTransactions ? (
-                                    <div className="px-4 py-6 text-center text-sm text-[#1E3A8A]/60">Loading…</div>
-                                ) : transactions.length === 0 ? (
-                                    <div className="px-4 py-6 text-center text-sm text-[#1E3A8A]/60">No transactions in this period.</div>
-                                ) : (
-                                    <table className="w-full text-xs">
-                                        <thead>
-                                            <tr className="border-b border-[#1E3A8A]/10 bg-[#F3F4F6]">
-                                                <th className="px-3 py-2 text-left font-semibold text-[#1E3A8A]">Date</th>
-                                                <th className="px-3 py-2 text-left font-semibold text-[#1E3A8A]">Description</th>
-                                                <th className="px-3 py-2 text-left font-semibold text-[#1E3A8A]">Type</th>
-                                                <th className="px-3 py-2 text-right font-semibold text-[#1E3A8A]">Amount</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {transactions.map((tx) => (
-                                                <tr key={tx.id} className="border-b border-[#1E3A8A]/5">
-                                                    <td className="px-3 py-2 text-[#1E3A8A]/90">{tx.transaction_date}</td>
-                                                    <td className="px-3 py-2 text-[#1E3A8A]/90">{tx.description || tx.expense_type_name || '—'}</td>
-                                                    <td className="px-3 py-2 text-[#1E3A8A]/90 capitalize">{tx.type}</td>
-                                                    <td className="px-3 py-2 text-right font-medium text-[#1E3A8A]">{tx.formatted_amount}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                )}
-                            </div>
                         </div>
                     </div>
                 )}
@@ -546,6 +462,20 @@ export default function CardsIndex() {
                 onClose={closeModal}
             >
                 <CardForm initialData={modalState.card} isEdit={!!modalState.card} onClose={closeModal} cardTypes={cardTypes ?? []} />
+            </Modal>
+            <Modal
+                title={statementPdfModal.label ? `Statement of Account — ${statementPdfModal.label}` : 'Statement of Account'}
+                open={statementPdfModal.open && !!statementPdfModal.cardId && !!statementPdfModal.month}
+                onClose={() => setStatementPdfModal({ open: false, cardId: null, month: null, label: '' })}
+                maxWidthClass="max-w-4xl"
+                contentNoPadding
+                contentClassName="flex flex-col h-[70vh]"
+            >
+                <iframe
+                    title="Statement of Account PDF"
+                    src={statementPdfModal.cardId && statementPdfModal.month ? `/cards/${statementPdfModal.cardId}/statement-pdf?month=${encodeURIComponent(statementPdfModal.month)}` : ''}
+                    className="w-full flex-1 min-h-[400px] border-0 rounded-b-2xl"
+                />
             </Modal>
             <ConfirmModal
                 open={deleteConfirm.open}

@@ -8,8 +8,8 @@ use App\Http\Requests\Expense\ExpenseUpdateRequest;
 use App\Models\Card;
 use App\Models\Expense;
 use App\Models\ExpenseType;
-use App\Models\PaymentTerm;
 use App\Models\User;
+use App\Models\PaymentTerm;
 use App\Services\Contracts\CardServiceInterface;
 use App\Services\Contracts\ExpenseServiceInterface;
 use Illuminate\Http\RedirectResponse;
@@ -31,43 +31,75 @@ class ExpenseController extends Controller
         $isAdmin = ($user->role ?? 'admin') === 'admin';
         $userId = $isAdmin ? null : $user->id;
 
-        $result = $this->expenses->paginateWithRelations(15, $userId);
+        $adminIds = $isAdmin ? User::query()->where('role', 'admin')->pluck('id')->all() : null;
+        $result = $this->expenses->paginateWithRelations(15, $userId, $isAdmin, $adminIds);
 
-        $items = collect($result->items())->map(function (Expense $expense) {
+        $items = collect($result->items())->map(function (Expense $expense) use ($isAdmin) {
             $isInstallment = ($expense->payment_type ?? 'full') === 'installment' && $expense->monthly_amortization;
+            $card = $expense->card;
+            $cardLabel = $isAdmin
+                ? ($card && $card->last_four ? '****' . $card->last_four : '—')
+                : ($card?->name ?? 'Unknown');
+            $amount = (float) $expense->amount;
+            $paidMonths = $expense->paid_months ?? [];
+            $paidMonthAmounts = $expense->paid_month_amounts ?? [];
+            $monthReqs = $isInstallment ? $this->monthRequirementsForExpense($expense) : [];
+            if ($isInstallment) {
+                $totalPaid = $this->effectiveTotalPaidForExpense($expense);
+                $remaining = round(array_sum(array_column($monthReqs, 'balance')), 2);
+            } else {
+                $totalPaid = in_array(1, $paidMonths, true) ? $amount : 0.0;
+                $remaining = round($amount - $totalPaid, 2);
+            }
+
             return [
                 'id' => $expense->id,
                 'user_id' => $expense->user_id,
+                'created_by' => $expense->created_by,
                 'user_name' => $expense->user?->name ?? '—',
                 'card_id' => $expense->card_id,
-                'card_name' => $expense->card?->name ?? 'Unknown',
-                'card_last_four' => $expense->card?->last_four,
+                'card_name' => $cardLabel,
+                'card_last_four' => $card?->last_four,
                 'expense_type_id' => $expense->expense_type_id,
                 'expense_type_name' => $expense->expenseType?->name,
                 'description' => $expense->description,
-                'amount' => (float) $expense->amount,
-                'formatted_amount' => CurrencyHelper::formatCurrency((float) $expense->amount),
+                'amount' => $amount,
+                'formatted_amount' => CurrencyHelper::formatCurrency($amount),
                 'formatted_monthly' => $isInstallment ? CurrencyHelper::formatCurrency((float) $expense->monthly_amortization) : null,
                 'type' => $expense->type,
                 'payment_type' => $expense->payment_type ?? 'full',
                 'payment_term_id' => $expense->payment_term_id,
                 'payment_term_months' => $expense->paymentTerm?->months,
                 'monthly_amortization' => $expense->monthly_amortization ? (float) $expense->monthly_amortization : null,
-                'paid_months' => $expense->paid_months ?? [],
-                'paid_month_amounts' => $expense->paid_month_amounts ?? [],
-                'month_requirements' => $this->monthRequirementsForExpense($expense),
+                'paid_months' => $paidMonths,
+                'paid_month_amounts' => $paidMonthAmounts,
+                'total_paid' => $totalPaid,
+                'remaining' => $remaining,
+                'formatted_remaining' => CurrencyHelper::formatCurrency($remaining),
+                'month_requirements' => $monthReqs,
                 'transaction_date' => optional($expense->transaction_date)->format('Y-m-d'),
                 'category' => $expense->category,
             ];
         });
 
-        $cardOptions = $this->cards->allActive($userId)->map(function (Card $card) {
-            $typeName = $card->cardType?->name ?? 'Card';
-            return [
-                'id' => $card->id,
-                'label' => $card->name . ($card->last_four ? ' •••• ' . $card->last_four : '') . ' · ' . $typeName,
-            ];
-        });
+        if ($isAdmin) {
+            $cardOptions = $this->cards->allActiveForExpenseLinking()->map(function (Card $card) {
+                $userName = $card->user?->name ?? 'User #' . $card->user_id;
+                $masked = $card->last_four ? '****' . $card->last_four : '****';
+                return [
+                    'id' => $card->id,
+                    'label' => $userName . ' — ' . $masked,
+                ];
+            });
+        } else {
+            $cardOptions = $this->cards->allActive($userId)->map(function (Card $card) {
+                $typeName = $card->cardType?->name ?? 'Card';
+                return [
+                    'id' => $card->id,
+                    'label' => $card->name . ($card->last_four ? ' •••• ' . $card->last_four : '') . ' · ' . $typeName,
+                ];
+            });
+        }
 
         $users = $isAdmin
             ? User::query()->orderBy('name')->get(['id', 'name'])->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])
@@ -107,6 +139,7 @@ class ExpenseController extends Controller
             }
         }
 
+        $data['created_by'] = $user->id;
         $this->expenses->create($data);
 
         return redirect()->route('expenses.index')->with('flash', [
@@ -205,7 +238,8 @@ class ExpenseController extends Controller
 
         // Installment: require previous months paid; when marking paid, require amount_paid >= amount_required
         $term = $expense->paymentTerm;
-        if (! $term || $month > $term->months) {
+        $termMonths = $term ? (int) $term->months : 0;
+        if (! $term || $month < 1) {
             if ($request->wantsJson()) {
                 return response()->json(['message' => 'Invalid month for this term.'], 422);
             }
@@ -228,6 +262,8 @@ class ExpenseController extends Controller
         $paidMonths = array_values(array_keys($amounts));
         sort($paidMonths);
 
+        $isExtraPayment = $month > $termMonths;
+
         if (in_array($month, $paidMonths, true)) {
             // Unpay: remove this month
             unset($amounts[$month]);
@@ -240,37 +276,55 @@ class ExpenseController extends Controller
             ]);
 
             if ($request->wantsJson()) {
+                $fresh = $expense->fresh();
+                $reqs = $this->monthRequirementsForExpense($fresh);
+                $remaining = round(array_sum(array_column($reqs, 'balance')), 2);
+                $effectivePaid = $this->effectiveTotalPaidForExpense($fresh);
                 return response()->json([
                     'paid_months' => $paidMonths,
                     'paid_month_amounts' => $amounts,
-                    'month_requirements' => $this->monthRequirementsForExpense($expense->fresh()),
+                    'month_requirements' => $reqs,
+                    'remaining' => $remaining,
+                    'formatted_remaining' => CurrencyHelper::formatCurrency($remaining),
+                    'total_paid' => $effectivePaid,
+                    'formatted_total_paid' => CurrencyHelper::formatCurrency($effectivePaid),
                 ]);
             }
 
             return redirect()->back()->with('flash', ['type' => 'success', 'message' => 'Payment status updated.']);
         }
 
-        // Mark month as paid: require amount_paid >= amount_required, and previous months must be paid
-        for ($prev = 1; $prev < $month; $prev++) {
-            if (! in_array($prev, $paidMonths, true)) {
-                if ($request->wantsJson()) {
-                    return response()->json(['message' => "Pay month {$prev} first."], 422);
+        if (! $isExtraPayment) {
+            // Mark month as paid: all previous months must be effectively paid (user paid or covered by credit)
+            for ($prev = 1; $prev < $month; $prev++) {
+                if (! $this->isMonthEffectivelyPaid($expense, $prev)) {
+                    if ($request->wantsJson()) {
+                        return response()->json(['message' => "Pay month {$prev} first."], 422);
+                    }
+
+                    return redirect()->route('expenses.index')->with('flash', ['type' => 'error', 'message' => "Pay month {$prev} first."]);
                 }
-
-                return redirect()->route('expenses.index')->with('flash', ['type' => 'error', 'message' => "Pay month {$prev} first."]);
             }
-        }
+            $amountRequired = $this->amountRequiredForMonth($expense, $month);
+            if ($amountRequired <= 0) {
+                if ($request->wantsJson()) {
+                    return response()->json(['message' => 'This month is already covered by prior credit. No payment needed.'], 422);
+                }
+                return redirect()->route('expenses.index')->with('flash', ['type' => 'error', 'message' => 'This month is already covered by prior credit.']);
+            }
+        } else {
+            // Extra payment (month > term): all regular months must be effectively paid first
+            for ($prev = 1; $prev <= $termMonths; $prev++) {
+                if (! $this->isMonthEffectivelyPaid($expense, $prev)) {
+                    if ($request->wantsJson()) {
+                        return response()->json(['message' => 'All installment months must be paid before recording an extra payment.'], 422);
+                    }
 
-        $monthly = round((float) $expense->monthly_amortization, 2);
-        $carry = 0.0;
-        for ($m = 1; $m < $month; $m++) {
-            $amountRequired = round(max(0.0, $monthly - $carry), 2);
-            $paid = isset($amounts[$m]) ? $amounts[$m] : 0.0;
-            $consumed = $monthly - $amountRequired;
-            $overpayment = max(0.0, $paid - $amountRequired);
-            $carry = round($carry - $consumed + $overpayment, 2);
+                    return redirect()->route('expenses.index')->with('flash', ['type' => 'error', 'message' => 'Complete all months first.']);
+                }
+            }
+            $amountRequired = 0.0;
         }
-        $amountRequired = round(max(0.0, $monthly - $carry), 2);
 
         $amountPaid = $request->input('amount_paid');
         if ($amountPaid === null || $amountPaid === '') {
@@ -307,10 +361,18 @@ class ExpenseController extends Controller
         ]);
 
         if ($request->wantsJson()) {
+            $fresh = $expense->fresh();
+            $reqs = $this->monthRequirementsForExpense($fresh);
+            $remaining = round(array_sum(array_column($reqs, 'balance')), 2);
+            $effectivePaid = $this->effectiveTotalPaidForExpense($fresh);
             return response()->json([
                 'paid_months' => $paidMonths,
                 'paid_month_amounts' => $amounts,
-                'month_requirements' => $this->monthRequirementsForExpense($expense->fresh()),
+                'month_requirements' => $reqs,
+                'remaining' => $remaining,
+                'formatted_remaining' => CurrencyHelper::formatCurrency($remaining),
+                'total_paid' => $effectivePaid,
+                'formatted_total_paid' => CurrencyHelper::formatCurrency($effectivePaid),
             ]);
         }
 
@@ -318,9 +380,11 @@ class ExpenseController extends Controller
     }
 
     /**
-     * For installment expenses: compute amount_required per month (monthly minus prior overpayments).
+     * Sequential installment waterfall:
+     * Row[n].Balance = (Baseline_Amortization - Carry_From_n-1) - Direct_Payment_n.
+     * Carry to n+1 = only overpayment that exceeds 100% of monthly (so partial payment does not zero out next month's due).
      *
-     * @return array<int, array{month: int, amount_required: float, formatted_amount_required: string, amount_paid: float|null, formatted_amount_paid: string|null}>
+     * @return array<int, array{month: int, amount_required: float, formatted_amount_required: string, amount_paid: float|null, formatted_amount_paid: string|null, is_covered_by_credit: bool, balance: float}>
      */
     private function monthRequirementsForExpense(Expense $expense): array
     {
@@ -330,38 +394,122 @@ class ExpenseController extends Controller
         $monthly = round((float) $expense->monthly_amortization, 2);
         $term = (int) $expense->paymentTerm->months;
         $amounts = $expense->paid_month_amounts ?? [];
-        // Normalize to integer keys and float values (JSON may have string keys)
         $amounts = array_map(
             fn ($v) => round((float) $v, 2),
             array_combine(array_map('intval', array_keys($amounts)), array_values($amounts))
         );
-        $amounts = array_filter($amounts, fn ($v) => $v > 0);
+        $amounts = array_filter($amounts, fn ($v) => $v !== null && $v !== '');
         if (empty($amounts) && ! empty($expense->paid_months)) {
             foreach ($expense->paid_months as $m) {
                 $amounts[(int) $m] = $monthly;
             }
         }
+
         $requirements = [];
-        $carry = 0.0;
+        $carriedCredit = 0.0;
+
         for ($m = 1; $m <= $term; $m++) {
-            $amountRequired = round(max(0.0, $monthly - $carry), 2);
-            $amountPaid = isset($amounts[$m]) ? $amounts[$m] : null;
-            if ($amountPaid !== null) {
-                // Consume carry used to reduce this month's due, then add this month's overpayment
-                $consumed = $monthly - $amountRequired;
-                $overpayment = max(0.0, $amountPaid - $amountRequired);
-                $carry = round($carry - $consumed + $overpayment, 2);
+            $dueThisMonth = round(max(0.0, $monthly - $carriedCredit), 2);
+            $userPaid = isset($amounts[$m]) ? $amounts[$m] : null;
+            $isCoveredByCredit = false;
+            $amountPaid = null;
+            $balance = $dueThisMonth;
+
+            $effectivePaidThisMonth = 0.0;
+            if ($userPaid !== null) {
+                $amountPaid = $userPaid;
+                $effectivePaidThisMonth = $userPaid;
+                $balance = round(max(0.0, $dueThisMonth - $userPaid), 2);
+                $carriedCredit = round(max(0.0, $userPaid - $monthly), 2);
+            } else {
+                if ($dueThisMonth <= 0) {
+                    $isCoveredByCredit = true;
+                    $amountPaid = 0.0;
+                    $balance = 0.0;
+                    $consumed = min($carriedCredit, $monthly);
+                    $effectivePaidThisMonth = round($consumed, 2);
+                    $carriedCredit = round($carriedCredit - $consumed, 2);
+                } else {
+                    $carriedCredit = 0.0;
+                }
             }
+
             $requirements[] = [
                 'month' => $m,
-                'amount_required' => $amountRequired,
-                'formatted_amount_required' => CurrencyHelper::formatCurrency($amountRequired),
+                'amount_required' => $dueThisMonth,
+                'formatted_amount_required' => CurrencyHelper::formatCurrency($dueThisMonth),
                 'amount_paid' => $amountPaid,
-                'formatted_amount_paid' => $amountPaid !== null ? CurrencyHelper::formatCurrency($amountPaid) : null,
+                'formatted_amount_paid' => $amountPaid !== null ? CurrencyHelper::formatCurrency($amountPaid) : ($isCoveredByCredit ? CurrencyHelper::formatCurrency(0) . ' (credit)' : null),
+                'is_covered_by_credit' => $isCoveredByCredit,
+                'balance' => $balance,
+                'effective_paid' => $effectivePaidThisMonth,
             ];
         }
 
         return $requirements;
+    }
+
+    /**
+     * Amount required for a given month using the same waterfall (carry forward through prior months).
+     */
+    private function amountRequiredForMonth(Expense $expense, int $month): float
+    {
+        if (($expense->payment_type ?? 'full') !== 'installment' || ! $expense->paymentTerm || $month < 1) {
+            return 0.0;
+        }
+        $reqs = $this->monthRequirementsForExpense($expense);
+        foreach ($reqs as $r) {
+            if ((int) $r['month'] === $month) {
+                return (float) $r['amount_required'];
+            }
+        }
+        return 0.0;
+    }
+
+    /**
+     * Whether a month is effectively paid (user recorded a payment or it is covered by prior credit).
+     */
+    private function isMonthEffectivelyPaid(Expense $expense, int $month): bool
+    {
+        $reqs = $this->monthRequirementsForExpense($expense);
+        foreach ($reqs as $r) {
+            if ((int) $r['month'] === $month) {
+                return $r['amount_paid'] !== null || ! empty($r['is_covered_by_credit']);
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Effective total paid from waterfall (user payments + months covered by credit).
+     */
+    private function effectiveTotalPaidForExpense(Expense $expense): float
+    {
+        if (($expense->payment_type ?? 'full') !== 'installment' || ! $expense->paymentTerm) {
+            $amount = (float) $expense->amount;
+            $paidMonths = $expense->paid_months ?? [];
+            return in_array(1, $paidMonths, true) ? $amount : 0.0;
+        }
+        $monthly = round((float) $expense->monthly_amortization, 2);
+        $term = (int) $expense->paymentTerm->months;
+        $reqs = $this->monthRequirementsForExpense($expense);
+        $total = 0.0;
+        foreach ($reqs as $r) {
+            if (isset($r['effective_paid']) && (float) $r['effective_paid'] > 0) {
+                $total += (float) $r['effective_paid'];
+            }
+        }
+        $amounts = $expense->paid_month_amounts ?? [];
+        $amounts = array_map(
+            fn ($v) => round((float) $v, 2),
+            array_combine(array_map('intval', array_keys($amounts)), array_values($amounts))
+        );
+        foreach ($amounts as $m => $amt) {
+            if ($m > $term && $amt > 0) {
+                $total += $amt;
+            }
+        }
+        return round($total, 2);
     }
 }
 

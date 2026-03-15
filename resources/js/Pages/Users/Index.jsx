@@ -4,33 +4,22 @@ import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { FormField } from '../../components/ui/FormField';
 import { FormValidationSummary } from '../../components/ui/FormValidationSummary';
-import { PasswordInput } from '../../components/ui/PasswordInput';
-import { PasswordStrengthIndicator } from '../../components/ui/PasswordStrengthIndicator';
-import { PasswordConfirmationHint } from '../../components/ui/PasswordConfirmationHint';
 import { AppDataTable } from '../../components/ui/DataTable';
+import { AddButton } from '../../components/ui/AddButton';
 import { useForm, usePage, router } from '@inertiajs/react';
 
-function UserForm({ initialData, onClose, isEdit }) {
-    const { data, setData, post, put, processing, errors, reset } = useForm({
+function UserForm({ initialData, onClose, isEdit, features = [] }) {
+    const { data, setData, post, put, processing, errors } = useForm({
         name: initialData?.name ?? '',
         email: initialData?.email ?? '',
-        password: '',
-        password_confirmation: '',
         role: initialData?.role ?? 'admin',
+        feature_ids: initialData?.feature_ids ?? [],
     });
 
     const submit = (e) => {
         e.preventDefault();
         const route = isEdit ? `/users/${initialData.id}` : '/users';
-        const method = isEdit ? put : post;
-
-        method(route, {
-            preserveScroll: true,
-            onSuccess: () => {
-                reset('password', 'password_confirmation');
-                onClose();
-            },
-        });
+        (isEdit ? put : post)(route, { preserveScroll: true, onSuccess: () => onClose() });
     };
 
     return (
@@ -50,24 +39,7 @@ function UserForm({ initialData, onClose, isEdit }) {
                     onChange={(e) => setData('email', e.target.value)}
                 />
             </FormField>
-            <FormField label={isEdit ? 'Password (optional)' : 'Password'} name="password" error={errors.password} required={!isEdit}>
-                <PasswordInput
-                    className={`w-full rounded-lg border px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 ${errors.password ? 'border-red-500 bg-red-50/50 focus:ring-red-500' : 'border-[#1E3A8A]/20 bg-[#F3F4F6] focus:ring-[#2563EB]'}`}
-                    value={data.password}
-                    onChange={(e) => setData('password', e.target.value)}
-                    placeholder={isEdit ? 'Leave blank to keep current password' : 'Min 10 chars, upper & lower case, number, symbol'}
-                />
-                <PasswordStrengthIndicator password={data.password} showOnlyWhenFilled />
-            </FormField>
-            <FormField label="Confirm password" name="password_confirmation" error={errors.password_confirmation} required={!isEdit}>
-                <PasswordInput
-                    className={`w-full rounded-lg border px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 ${errors.password_confirmation ? 'border-red-500 bg-red-50/50 focus:ring-red-500' : 'border-[#1E3A8A]/20 bg-[#F3F4F6] focus:ring-[#2563EB]'}`}
-                    value={data.password_confirmation}
-                    onChange={(e) => setData('password_confirmation', e.target.value)}
-                    placeholder={isEdit ? 'Leave blank to keep current password' : ''}
-                />
-                <PasswordConfirmationHint password={data.password} confirmation={data.password_confirmation} />
-            </FormField>
+            <p className="text-[11px] text-[#1E3A8A]/60">The user will set their password via Forgot Password or the registration verification link.</p>
             <FormField label="Role" name="role" error={errors.role} required>
                 <select
                     className={`w-full rounded-lg border px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 ${errors.role ? 'border-red-500 bg-red-50/50 focus:ring-red-500' : 'border-[#1E3A8A]/20 bg-[#F3F4F6] focus:ring-[#2563EB]'}`}
@@ -78,6 +50,33 @@ function UserForm({ initialData, onClose, isEdit }) {
                     <option value="user">User</option>
                 </select>
             </FormField>
+
+            <div className="space-y-2">
+                <span className="text-xs font-medium text-[#1E3A8A]">Feature access</span>
+                <p className="text-[11px] text-[#1E3A8A]/60">Enable Cards, Expense Tracker, and/or Salary Monitoring for this user.</p>
+                <div className="space-y-2 pt-1">
+                    {features.map((feature) => (
+                        <label
+                            key={feature.id}
+                            className="flex items-center gap-3 cursor-pointer rounded-lg border border-[#1E3A8A]/20 bg-[#F3F4F6] px-3 py-2 hover:bg-[#E5E7EB]"
+                        >
+                            <input
+                                type="checkbox"
+                                checked={data.feature_ids.includes(feature.id)}
+                                onChange={(e) => {
+                                    const next = e.target.checked
+                                        ? [...data.feature_ids, feature.id]
+                                        : data.feature_ids.filter((id) => id !== feature.id);
+                                    setData('feature_ids', next);
+                                }}
+                                className="h-4 w-4 rounded border-[#1E3A8A]/30 text-[#2563EB] focus:ring-[#2563EB]"
+                            />
+                            <span className="text-xs font-medium text-[#1E3A8A]">{feature.display_name}</span>
+                        </label>
+                    ))}
+                </div>
+                {errors.feature_ids && <p className="text-xs text-red-600 mt-1">{errors.feature_ids}</p>}
+            </div>
 
             <div className="flex justify-end gap-2 pt-2">
                 <button
@@ -101,7 +100,7 @@ function UserForm({ initialData, onClose, isEdit }) {
 
 export default function UsersIndex() {
     const { props } = usePage();
-    const { users } = props;
+    const { users, features = [] } = props;
     const [modalState, setModalState] = useState({ open: false, user: null });
     const [deleteConfirm, setDeleteConfirm] = useState({ open: false, url: null });
 
@@ -121,10 +120,20 @@ export default function UsersIndex() {
     const openEdit = (user) => setModalState({ open: true, user });
     const closeModal = () => setModalState({ open: false, user: null });
 
+    const featureNamesByKey = (features || []).reduce((acc, f) => ({ ...acc, [f.id]: f.display_name }), {});
+
     const columns = [
         { name: 'Name', selector: (row) => row.name, sortable: true },
         { name: 'Email', selector: (row) => row.email, sortable: true },
         { name: 'Role', selector: (row) => row.role, sortable: true, cell: (row) => <span className="uppercase text-xs tracking-wide">{row.role}</span> },
+        {
+            name: 'Features',
+            cell: (row) => (
+                <span className="text-xs text-[#1E3A8A]/80">
+                    {(row.feature_ids || []).map((id) => featureNamesByKey[id]).filter(Boolean).join(', ') || '—'}
+                </span>
+            ),
+        },
         {
             name: 'Actions',
             cell: (row) => (
@@ -167,27 +176,27 @@ export default function UsersIndex() {
 
     return (
         <AppLayout>
-            <div className="flex items-center justify-between mb-4">
-                <div>
-                    <h1 className="text-lg font-semibold text-[#1E3A8A]">Users Management</h1>
-                    <p className="text-sm text-[#1E3A8A]/70 mt-1">Manage who can access CardFlow.</p>
-                </div>
-                <button
-                    onClick={openCreate}
-                    className="inline-flex items-center rounded-lg bg-[#2563EB] px-3 py-1.5 text-sm font-medium text-[#F3F4F6] hover:bg-[#1E3A8A]"
-                >
-                    + New user
-                </button>
+            <div className="mb-4">
+                <h1 className="text-lg font-semibold text-[#1E3A8A]">Users Management</h1>
+                <p className="text-sm text-[#1E3A8A]/70 mt-1">Manage who can access CardFlow.</p>
             </div>
 
-            <AppDataTable columns={columns} data={users ?? []} searchPlaceholder="Search users..." />
+            <div className="rounded-2xl border border-[#1E3A8A]/20 bg-white overflow-hidden">
+                <div className="flex justify-between items-center px-4 py-3 border-b border-[#1E3A8A]/10 bg-[#F3F4F6]">
+                    <h2 className="text-sm font-semibold text-[#1E3A8A]">Users</h2>
+                    <AddButton onClick={openCreate} ariaLabel="New user">Add user</AddButton>
+                </div>
+                <div className="p-4">
+                    <AppDataTable columns={columns} data={users ?? []} searchPlaceholder="Search users..." />
+                </div>
+            </div>
 
             <Modal
                 title={modalState.user ? 'Edit user' : 'New user'}
                 open={modalState.open}
                 onClose={closeModal}
             >
-                <UserForm initialData={modalState.user} isEdit={!!modalState.user} onClose={closeModal} />
+                <UserForm initialData={modalState.user} isEdit={!!modalState.user} onClose={closeModal} features={features} />
             </Modal>
             <ConfirmModal
                 open={deleteConfirm.open}

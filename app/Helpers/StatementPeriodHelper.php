@@ -29,4 +29,29 @@ class StatementPeriodHelper
 
         return self::periodFor($year, $month, $statementDay);
     }
+
+    /**
+     * The statement period that contains the given date.
+     *
+     * @return array{0: \Carbon\Carbon, 1: \Carbon\Carbon}
+     */
+    public static function periodContainingDate(Carbon $date, int $statementDay): array
+    {
+        $statementDay = max(1, min(31, $statementDay));
+        $year = (int) $date->format('Y');
+        $month = (int) $date->format('n');
+        [$from, $to] = self::periodFor($year, $month, $statementDay);
+        if ($date->gte($from) && $date->lte($to)) {
+            return [$from, $to];
+        }
+        if ($date->lt($from)) {
+            $prev = Carbon::createFromDate($year, $month - 1, 1);
+
+            return self::periodFor((int) $prev->format('Y'), (int) $prev->format('n'), $statementDay);
+        }
+
+        $next = Carbon::createFromDate($year, $month + 1, 1);
+
+        return self::periodFor((int) $next->format('Y'), (int) $next->format('n'), $statementDay);
+    }
 }

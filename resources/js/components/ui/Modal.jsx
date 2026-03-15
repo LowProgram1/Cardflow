@@ -1,12 +1,12 @@
 import React from 'react';
 
-export function Modal({ title, open, onClose, children, headerClassName = '' }) {
+export function Modal({ title, open, onClose, children, headerClassName = '', maxWidthClass = 'max-w-lg', contentClassName = '', contentNoPadding = false }) {
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#1E3A8A]/40 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 shadow-xl">
-                <div className={`flex items-center justify-between px-5 py-4 border-b border-[#1E3A8A]/20 ${headerClassName}`}>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#1E3A8A]/40 backdrop-blur-sm p-4">
+            <div className={`w-full ${maxWidthClass} rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 shadow-xl max-h-[90vh] flex flex-col`}>
+                <div className={`flex items-center justify-between px-5 py-4 border-b border-[#1E3A8A]/20 shrink-0 ${headerClassName}`}>
                     <h2 className="text-sm font-semibold tracking-tight text-[#1E3A8A]">{title}</h2>
                     <button
                         type="button"
@@ -28,7 +28,7 @@ export function Modal({ title, open, onClose, children, headerClassName = '' }) 
                         </svg>
                     </button>
                 </div>
-                <div className="px-5 py-4 text-sm text-[#1E3A8A]">{children}</div>
+                <div className={`text-sm text-[#1E3A8A] flex-1 min-h-0 overflow-auto ${contentNoPadding ? 'p-0' : 'px-5 py-4'} ${contentClassName}`}>{children}</div>
             </div>
         </div>
     );

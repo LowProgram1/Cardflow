@@ -12,6 +12,7 @@ class Expense extends Model
     protected $fillable = [
         'card_id',
         'user_id',
+        'created_by',
         'expense_type_id',
         'description',
         'amount',
@@ -45,6 +46,22 @@ class Expense extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function scopeAdminCreated($query, ?array $adminIds)
+    {
+        if ($adminIds === null || $adminIds === []) {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($adminIds) {
+            $q->whereNull('created_by')->orWhereIn('created_by', $adminIds);
+        });
     }
 
     public function expenseType()
