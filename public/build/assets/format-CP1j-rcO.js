@@ -1,0 +1,1 @@
+function m(n,t={}){const{decimals:i=2}=t;if(n==null||n==="")return"—";const r=Number(n);return Number.isNaN(r)?"—":r.toLocaleString("en-US",{minimumFractionDigits:i,maximumFractionDigits:i})}function o(n,t=2){if(n==null||n==="")return"—";const i=Number(n);return Number.isNaN(i)?"—":i.toLocaleString("en-US",{minimumFractionDigits:t,maximumFractionDigits:t})}export{o as a,m as f};
