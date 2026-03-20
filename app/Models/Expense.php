@@ -73,5 +73,12 @@ class Expense extends Model
     {
         return $this->belongsTo(PaymentTerm::class);
     }
+
+    public function scopeCurrentMonth($query)
+    {
+        return $query
+            ->whereYear('transaction_date', now()->year)
+            ->whereMonth('transaction_date', now()->month);
+    }
 }
 

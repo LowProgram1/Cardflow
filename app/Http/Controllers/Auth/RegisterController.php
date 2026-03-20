@@ -9,10 +9,12 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
+use Throwable;
 
 class RegisterController extends Controller
 {
@@ -42,7 +44,16 @@ class RegisterController extends Controller
 
         $user->features()->sync(Feature::defaultFeatureIds());
 
-        Mail::to($user->email)->send(new VerifyRegistrationMail($user));
+        try {
+            // Queue verification email to avoid blocking the request on SMTP/network issues.
+            Mail::to($user->email)->queue(new VerifyRegistrationMail($user));
+        } catch (Throwable $e) {
+            Log::warning('Failed to queue registration verification email.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return redirect()->route('login')->with('flash', [
             'type' => 'success',

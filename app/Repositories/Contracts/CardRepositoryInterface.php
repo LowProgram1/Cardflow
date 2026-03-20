@@ -18,7 +18,7 @@ interface CardRepositoryInterface
      *
      * @return Collection<int, Card>
      */
-    public function allActiveForExpenseLinking(): Collection;
+    public function allActiveForExpenseLinking(bool $adminOwnedOnly = true): Collection;
 
     public function create(array $attributes): Card;
 

@@ -26,14 +26,18 @@
 | **Auth** | Auto-logout (inactivity) | After 5 minutes of no mouse/keyboard/scroll/touch activity (configurable via `SESSION_LIFETIME` in .env), the user is logged out and redirected to login with an “inactivity” message. When the tab was in the background, logout runs on returning to the tab. Applies to both admin and user. |
 | **Roles** | Admin vs User | Backend: `auth.isAdmin` and `role`; middleware `admin` protects `/users` and `/expenses`. Sidebar shows Users & Expenses only when `auth.isAdmin` is true. |
 | **Dashboard** | View summary | Role-dependent: admin sees full metrics and lists; user sees only their expense logs and payment history. |
+| **Dashboard** | Monthly outstanding with advance credit | Per-card and overall monthly outstanding can be negative for advance payments; credit is consumed in the next statement cycle to move values back toward zero. |
 | **Profile** | Update profile | Edit name and password (Settings → Profile). Email is displayed but **not editable**. |
 | **Users** | List / Create / Edit / Delete | **Admin only.** User CRUD; sidebar and routes restricted for non-admin. |
 | **Cards** | List / Create / Edit / Delete | **Admin:** Full CRUD and card grid. **User:** View-only; no card tiles; only “Transactions & statements” (list of cards with View transactions and Statement links). |
+| **Cards** | Monthly drill-down modal behavior | From card tile or view icon: opens monthly obligations modal; `Back to cards` exits cleanly (no blank intermediate modal state). |
 | **Expenses** | List / Create / Edit / Delete | **Admin only.** Expense CRUD; toggle paid month for installments. Non-admin cannot access sidebar link or routes (403). |
 | **Expenses** | Toggle paid month (installment) | Record or remove payment for a specific installment month (admin only). |
+| **Expenses** | Exact installment month payment | Installment month payment amount is fixed to the computed due amount (exact match required). UI disables manual edit for standard month payments and shows success/error validation messages. |
 | **Settings** | Card types / Expense types / Payment terms | **Admin only.** CRUD for card types, expense types, and payment terms. |
 | **Settings** | Profile | All roles. Name and password editable; email read-only. |
 | **Settings** | Favicon / Logo | **Admin only.** Upload a .ico file (Settings → Profile) to set the browser tab icon and sidebar logo. One file used for both. |
+| **Salary** | PDF export preview and filters | Full-time and part-time PDF exports open in a new tab (`stream`) for review first. Full-time supports optional class filter (`Class ID` shown in PDF metadata). Part-time supports optional student filter (`Student Name`). |
 | **UI (responsive)** | Desktop navigation | Vertical sidebar (≥768px): logo, Profile (avatar + name) pinned, nav links (Dashboard, Users, Cards, Expenses, Settings), Logout at bottom. Main content has margin-left; bottom bar hidden. |
 | **UI (responsive)** | Mobile navigation | Fixed bottom bar (<768px): Dashboard, Users, Cards, Expenses (role-filtered); label below icon; safe-area padding. Top header: Profile, Settings, Logout. Sidebar hidden on mobile. Main content padding-bottom so bottom nav does not overlap. |
 | **UI (responsive)** | Dashboard actions | “Manage Cards” and “Log Expense” show icon-only on mobile (text hidden); full label on desktop. Touch-friendly padding on mobile. |
@@ -61,6 +65,9 @@
 | Models | `app/Models/` | User (role), Card, CardType, Expense, ExpenseType, PaymentTerm. |
 | Requests | `app/Http/Requests/` | Validation for store/update (Card, User, Expense, etc.). |
 | Helpers | `app/Helpers/` | CurrencyHelper, StatementPeriodHelper. |
+
+**Statement period correctness**
+- `StatementPeriodHelper::periodFor()` clamps `statement_day` to each month’s actual max day to avoid short-month overflow (e.g. day 31 in April). This keeps month sequencing/pay-order logic correct in Cards and Dashboard.
 
 ### 4.2 Frontend
 

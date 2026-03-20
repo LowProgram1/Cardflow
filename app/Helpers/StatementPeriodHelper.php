@@ -12,8 +12,19 @@ class StatementPeriodHelper
      */
     public static function periodFor(int $year, int $month, int $statementDay): array
     {
-        $start = Carbon::createFromDate($year, $month - 1, $statementDay)->addDay()->startOfDay();
-        $end = Carbon::createFromDate($year, $month, $statementDay)->endOfDay();
+        $statementDay = max(1, min(31, $statementDay));
+
+        $prevMonthDate = Carbon::createFromDate($year, $month - 1, 1);
+        $prevMonthDay = min($statementDay, (int) $prevMonthDate->daysInMonth);
+
+        $currentMonthDate = Carbon::createFromDate($year, $month, 1);
+        $currentMonthDay = min($statementDay, (int) $currentMonthDate->daysInMonth);
+
+        $start = Carbon::createFromDate((int) $prevMonthDate->format('Y'), (int) $prevMonthDate->format('n'), $prevMonthDay)
+            ->addDay()
+            ->startOfDay();
+        $end = Carbon::createFromDate((int) $currentMonthDate->format('Y'), (int) $currentMonthDate->format('n'), $currentMonthDay)
+            ->endOfDay();
 
         return [$start, $end];
     }

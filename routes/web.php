@@ -21,6 +21,7 @@ use App\Http\Controllers\FeatureController;
 use App\Http\Controllers\SalaryController;
 use App\Http\Controllers\UserFeatureController;
 use App\Http\Controllers\PartTimeController;
+use App\Http\Controllers\StatementController;
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'show'])->name('login');
@@ -95,6 +96,10 @@ Route::middleware('feature:cards')->group(function () {
     Route::get('cards/{card}/statement-months', [CardController::class, 'statementMonths'])->name('cards.statement-months');
     Route::get('cards/{card}/statement', [CardController::class, 'statement'])->name('cards.statement');
     Route::get('cards/{card}/statement-pdf', [CardController::class, 'statementPdf'])->name('cards.statement-pdf');
+});
+
+Route::prefix('api')->middleware('auth')->group(function () {
+    Route::get('/statements/{year}/{month}', [StatementController::class, 'show'])->name('api.statements.show');
 });
 Route::get('/card-types', fn () => redirect()->route('settings.index', ['section' => 'card-types']))->name('card-types.index');
 Route::resource('card-types', CardTypeController::class)->only(['store', 'update', 'destroy']);

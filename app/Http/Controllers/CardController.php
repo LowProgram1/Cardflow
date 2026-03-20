@@ -8,6 +8,7 @@ use App\Http\Requests\Card\CardStoreRequest;
 use App\Http\Requests\Card\CardUpdateRequest;
 use App\Models\Card;
 use App\Models\CardType;
+use App\Models\Expense;
 use App\Services\Contracts\CardServiceInterface;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -127,8 +128,25 @@ class CardController extends Controller
         $expenses = $this->cards->getTransactionsForCard($card, $from, $to);
 
         $items = $expenses->map(function ($expense) {
+            if (is_array($expense)) {
+                return [
+                    'id' => $expense['id'] ?? null,
+                    'expense_id' => $expense['expense_id'] ?? null,
+                    'month_number' => $expense['month_number'] ?? null,
+                    'description' => $expense['description'] ?? null,
+                    'amount' => (float) ($expense['amount'] ?? 0),
+                    'formatted_amount' => $expense['formatted_amount'] ?? CurrencyHelper::formatCurrency((float) ($expense['amount'] ?? 0)),
+                    'type' => $expense['type'] ?? null,
+                    'transaction_date' => $expense['transaction_date'] ?? null,
+                    'expense_type_name' => $expense['expense_type_name'] ?? null,
+                    'user_name' => $expense['user_name'] ?? null,
+                ];
+            }
+
             return [
                 'id' => $expense->id,
+                'expense_id' => $expense->id,
+                'month_number' => null,
                 'description' => $expense->description,
                 'amount' => (float) $expense->amount,
                 'formatted_amount' => CurrencyHelper::formatCurrency((float) $expense->amount),
@@ -150,9 +168,18 @@ class CardController extends Controller
         if ($card->user_id !== (int) auth()->id()) {
             abort(403, 'You can only view statement months for your own cards.');
         }
-        $months = $this->cards->getStatementMonthsForCard($card);
 
-        return response()->json(['statement_months' => $months]);
+        try {
+            $months = $this->cards->getStatementMonthsForCard($card);
+            return response()->json(['statement_months' => $months]);
+        } catch (\Throwable $e) {
+            report($e);
+            // Return 200 so the UI shows an empty list + the error message instead of failing silently.
+            return response()->json([
+                'statement_months' => [],
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -160,53 +187,8 @@ class CardController extends Controller
      */
     public function statement(Request $request, Card $card)
     {
-        if ($card->user_id !== (int) auth()->id()) {
-            abort(403, 'You can only view statements for your own cards.');
-        }
-        $card->load('user');
-        $month = $request->input('month', now()->format('Y-m'));
-        $statementDay = (int) ($card->statement_day ?? 1);
-        $statementDay = max(1, min(31, $statementDay));
-
-        [$from, $to] = StatementPeriodHelper::periodForYearMonth($month, $statementDay);
-        $transactions = $this->cards->getTransactionsForCard($card, $from, $to);
-
-        $userName = $card->user?->name ?? 'Cardholder';
-        $dueDay = $card->due_day;
-        $dueDateLabel = '—';
-        if ($dueDay) {
-            $periodEnd = $to->copy();
-            $dueDate = $periodEnd->copy()->addMonth()->day(min($dueDay, $periodEnd->copy()->addMonth()->daysInMonth));
-            $dueDateLabel = $dueDate->format('F j, Y');
-        }
-
-        $rows = $transactions->map(function ($expense) {
-            return [
-                'date' => $expense->transaction_date?->format('M j, Y'),
-                'description' => $expense->description ?? $expense->expenseType?->name ?? '—',
-                'type' => $expense->type,
-                'amount' => (float) $expense->amount,
-                'formatted_amount' => CurrencyHelper::formatCurrency((float) $expense->amount),
-            ];
-        });
-
-        $paymentHistoryRaw = $this->cards->getPaymentHistoryForCard($card, $from, $to);
-        $paymentHistory = array_map(function ($row) {
-            $row['formatted_amount'] = CurrencyHelper::formatCurrency($row['amount']);
-
-            return $row;
-        }, $paymentHistoryRaw);
-
-        return view('cards.statement', [
-            'card' => $card,
-            'userName' => $userName,
-            'transactions' => $rows,
-            'paymentHistory' => $paymentHistory,
-            'periodStart' => $from->format('M j, Y'),
-            'periodEnd' => $to->format('M j, Y'),
-            'dueDateLabel' => $dueDateLabel,
-            'statementMonth' => $month,
-        ]);
+        // Keep SOA generation in one file path by rendering through statementPdf().
+        return $this->statementPdf($request, $card);
     }
 
     /**
@@ -217,51 +199,304 @@ class CardController extends Controller
         if ($card->user_id !== (int) auth()->id()) {
             abort(403, 'You can only view statements for your own cards.');
         }
-        $card->load('user');
         $month = $request->input('month', now()->format('Y-m'));
-        $statementDay = (int) ($card->statement_day ?? 1);
-        $statementDay = max(1, min(31, $statementDay));
-
-        [$from, $to] = StatementPeriodHelper::periodForYearMonth($month, $statementDay);
-        $transactions = $this->cards->getTransactionsForCard($card, $from, $to);
-
-        $userName = $card->user?->name ?? 'Cardholder';
-        $dueDay = $card->due_day;
-        $dueDateLabel = '—';
-        if ($dueDay) {
-            $periodEnd = $to->copy();
-            $dueDate = $periodEnd->copy()->addMonth()->day(min($dueDay, $periodEnd->copy()->addMonth()->daysInMonth));
-            $dueDateLabel = $dueDate->format('F j, Y');
+        if (! preg_match('/^\d{4}-\d{2}$/', (string) $month)) {
+            abort(422, 'Invalid statement month format.');
         }
-
-        $rows = $transactions->map(function ($expense) {
-            return [
-                'date' => $expense->transaction_date?->format('M j, Y'),
-                'description' => $expense->description ?? $expense->expenseType?->name ?? '—',
-                'type' => $expense->type,
-                'amount' => (float) $expense->amount,
-                'formatted_amount' => CurrencyHelper::formatCurrency((float) $expense->amount),
-            ];
-        });
-
-        $paymentHistoryRaw = $this->cards->getPaymentHistoryForCard($card, $from, $to);
-        $paymentHistory = array_map(function ($row) {
-            $row['formatted_amount'] = CurrencyHelper::formatCurrency($row['amount']);
-
-            return $row;
-        }, $paymentHistoryRaw);
+        if (! $this->isSoaMonthAvailable($card, (string) $month)) {
+            abort(422, 'SOA is not yet available for this month. Wait for the statement date.');
+        }
+        $payload = $this->buildStatementPayload($card, $month);
 
         $pdf = Pdf::loadView('cards.statement-pdf', [
-            'card' => $card,
-            'userName' => $userName,
-            'transactions' => $rows,
-            'paymentHistory' => $paymentHistory,
-            'periodStart' => $from->format('M j, Y'),
-            'periodEnd' => $to->format('M j, Y'),
-            'dueDateLabel' => $dueDateLabel,
+            'card' => $payload['card'],
+            'userName' => $payload['userName'],
+            'transactions' => $payload['transactions'],
+            'paymentHistory' => $payload['paymentHistory'],
+            'statementMonthLabel' => $payload['statementMonthLabel'],
+            'periodStart' => $payload['periodStart'],
+            'periodEnd' => $payload['periodEnd'],
+            'dueDateLabel' => $payload['dueDateLabel'],
+            'txnTotal' => $payload['txnTotal'],
+            'paymentTotal' => $payload['paymentTotal'],
+            'netDue' => $payload['netDue'],
         ])->setPaper('a4');
 
         return $pdf->stream('statement-' . $month . '.pdf');
+    }
+
+    private function buildStatementPayload(Card $card, string $month): array
+    {
+        $card->load('user');
+        $statementDay = (int) ($card->statement_day ?? 1);
+        $statementDay = max(1, min(31, $statementDay));
+
+        // SOA month content is based on the selected month itself (month-scoped),
+        // so Monthly Installment and Full Payment for that month are fully included.
+        $from = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+        $to = Carbon::createFromFormat('Y-m', $month)->endOfMonth();
+
+        $selectedMonthStart = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+        $selectedMonthEnd = Carbon::createFromFormat('Y-m', $month)->endOfMonth();
+
+        $expenseRows = collect();
+
+        // 1) Installment monthly charges (always listed for the selected month if month is covered)
+        $installmentExpenses = Expense::query()
+            ->where('card_id', $card->id)
+            ->where('type', 'expense')
+            ->where('payment_type', 'installment')
+            ->whereNotNull('transaction_date')
+            ->with(['paymentTerm', 'expenseType'])
+            ->get();
+
+        foreach ($installmentExpenses as $expense) {
+            if (! $expense->transaction_date || ! $expense->paymentTerm) {
+                continue;
+            }
+            $txDate = Carbon::parse($expense->transaction_date);
+            if ($txDate->lt($selectedMonthStart) || $txDate->gt($selectedMonthEnd)) {
+                continue;
+            }
+            $start = $txDate->copy()->startOfMonth();
+            $term = (int) ($expense->paymentTerm->months ?? 0);
+            if ($term <= 0) {
+                continue;
+            }
+
+            $startKey = ((int) $start->format('Y')) * 12 + (int) $start->format('n');
+            $selKey = ((int) $selectedMonthStart->format('Y')) * 12 + (int) $selectedMonthStart->format('n');
+            $monthNo = ($selKey - $startKey) + 1;
+            if ($monthNo < 1 || $monthNo > $term) {
+                continue;
+            }
+
+            $dueAmount = round((float) ($expense->monthly_amortization ?? 0), 2);
+            $paidAmounts = $expense->paid_month_amounts ?? [];
+            $paidAmount = isset($paidAmounts[$monthNo]) ? round((float) $paidAmounts[$monthNo], 2) : 0.0;
+            if ($paidAmount <= 0 && in_array($monthNo, $expense->paid_months ?? [], true)) {
+                $paidAmount = $dueAmount;
+            }
+
+            $description = ($expense->description ?? $expense->expenseType?->name ?? 'Installment') . ' (month ' . $monthNo . ')';
+            $expenseRows->push([
+                'expense_id' => $expense->id,
+                'date' => $txDate->format('M j, Y'),
+                'description' => $description,
+                'type' => 'installment',
+                'status' => $paidAmount > 0 ? 'Paid' : 'Unpaid',
+                'amount' => $dueAmount,
+                'formatted_amount' => CurrencyHelper::formatCurrency($dueAmount),
+                'paid_amount' => $paidAmount,
+                'formatted_paid_amount' => CurrencyHelper::formatCurrency($paidAmount),
+            ]);
+        }
+
+        // 2) Full-payment expenses posted in the selected month
+        $fullExpenses = Expense::query()
+            ->where('card_id', $card->id)
+            ->where('type', 'expense')
+            ->where('payment_type', 'full')
+            ->whereDate('transaction_date', '>=', $selectedMonthStart->toDateString())
+            ->whereDate('transaction_date', '<=', $selectedMonthEnd->toDateString())
+            ->with(['expenseType'])
+            ->get();
+
+        foreach ($fullExpenses as $expense) {
+            $dueAmount = round((float) ($expense->amount ?? 0), 2);
+            $isPaid = in_array(1, $expense->paid_months ?? [], true);
+            $paidAmount = $isPaid ? $dueAmount : 0.0;
+            $expenseRows->push([
+                'expense_id' => $expense->id,
+                'date' => optional($expense->transaction_date)->format('M j, Y'),
+                'description' => $expense->description ?? $expense->expenseType?->name ?? 'Full payment',
+                'type' => 'full',
+                'status' => $isPaid ? 'Paid' : 'Unpaid',
+                'amount' => $dueAmount,
+                'formatted_amount' => CurrencyHelper::formatCurrency($dueAmount),
+                'paid_amount' => $paidAmount,
+                'formatted_paid_amount' => CurrencyHelper::formatCurrency($paidAmount),
+            ]);
+        }
+
+        // 2b) Bank-style safety net:
+        // include any posted expense row in the selected month that is not yet represented above.
+        $postedMonthExpenses = Expense::query()
+            ->where('card_id', $card->id)
+            ->where('type', 'expense')
+            ->whereDate('transaction_date', '>=', $selectedMonthStart->toDateString())
+            ->whereDate('transaction_date', '<=', $selectedMonthEnd->toDateString())
+            ->with(['expenseType'])
+            ->get();
+
+        $existingExpenseIds = $expenseRows
+            ->map(fn ($r) => (int) ($r['expense_id'] ?? 0))
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->all();
+
+        foreach ($postedMonthExpenses as $expense) {
+            if (in_array((int) $expense->id, $existingExpenseIds, true)) {
+                continue;
+            }
+            $amount = round((float) ($expense->amount ?? 0), 2);
+            $status = in_array(1, $expense->paid_months ?? [], true) ? 'Paid' : 'Unpaid';
+            $paidAmount = $status === 'Paid' ? $amount : 0.0;
+            $expenseRows->push([
+                'expense_id' => $expense->id,
+                'date' => optional($expense->transaction_date)->format('M j, Y'),
+                'description' => $expense->description ?? $expense->expenseType?->name ?? 'Expense',
+                'type' => (string) ($expense->payment_type ?? 'expense'),
+                'status' => $status,
+                'amount' => $amount,
+                'formatted_amount' => CurrencyHelper::formatCurrency($amount),
+                'paid_amount' => $paidAmount,
+                'formatted_paid_amount' => CurrencyHelper::formatCurrency($paidAmount),
+            ]);
+        }
+
+        $rows = $expenseRows->values()->all();
+
+        // 3) Payments posted in selected month (credit entries)
+        $paymentHistoryRaw = Expense::query()
+            ->where('card_id', $card->id)
+            ->where('type', 'payment')
+            ->whereDate('transaction_date', '>=', $selectedMonthStart->toDateString())
+            ->whereDate('transaction_date', '<=', $selectedMonthEnd->toDateString())
+            ->with(['expenseType'])
+            ->orderBy('transaction_date')
+            ->orderBy('id')
+            ->get()
+            ->map(function ($p) {
+                $amount = round((float) ($p->amount ?? 0), 2);
+                return [
+                    'date' => optional($p->transaction_date)->format('M j, Y'),
+                    'description' => $p->description ?? $p->expenseType?->name ?? 'Payment',
+                    'amount' => $amount,
+                    'formatted_amount' => CurrencyHelper::formatCurrency($amount),
+                ];
+            })
+            ->values()
+            ->all();
+        $paymentHistory = $paymentHistoryRaw;
+
+        // SOA transaction history: selected statement month scope (expenses + payment rows).
+        $timeline = collect();
+        foreach ($rows as $row) {
+            $type = (string) ($row['type'] ?? 'expense');
+            $amount = (float) ($row['amount'] ?? 0);
+            $paidAmount = (float) ($row['paid_amount'] ?? 0);
+            $status = (string) ($row['status'] ?? ($amount <= 0 ? 'Paid' : 'Unpaid'));
+            $dateRaw = (string) ($row['date'] ?? '');
+            $dateKey = null;
+            if ($dateRaw !== '') {
+                try {
+                    $dateKey = Carbon::parse($dateRaw)->format('Y-m-d');
+                } catch (\Throwable $e) {
+                    $dateKey = null;
+                }
+            }
+            $timeline->push([
+                'date' => $dateRaw ?: '—',
+                'description' => $row['description'] ?? '—',
+                'type' => 'expense',
+                'status' => $status,
+                'amount' => $amount,
+                'formatted_amount' => $row['formatted_amount'] ?? CurrencyHelper::formatCurrency($amount),
+                'paid_amount' => 0.0,
+                'formatted_paid_amount' => CurrencyHelper::formatCurrency(0),
+                'date_key' => $dateKey,
+                'sort_group' => 1,
+            ]);
+
+            // Bank-style ledger row: show paid part as a separate transaction line.
+            if ($paidAmount > 0) {
+                $timeline->push([
+                    'date' => $dateRaw ?: '—',
+                    'description' => 'Payment · ' . ($row['description'] ?? 'Expense'),
+                    'type' => 'paid',
+                    'status' => 'Paid',
+                    'amount' => 0.0,
+                    'formatted_amount' => CurrencyHelper::formatCurrency(0),
+                    'paid_amount' => $paidAmount,
+                    'formatted_paid_amount' => $row['formatted_paid_amount'] ?? CurrencyHelper::formatCurrency($paidAmount),
+                    'date_key' => $dateKey,
+                    'sort_group' => 2,
+                ]);
+            }
+        }
+
+        foreach ($paymentHistory as $payment) {
+            $amount = (float) ($payment['amount'] ?? 0);
+            $dateRaw = (string) ($payment['date'] ?? '');
+            $dateKey = null;
+            if ($dateRaw !== '') {
+                try {
+                    $dateKey = Carbon::parse($dateRaw)->format('Y-m-d');
+                } catch (\Throwable $e) {
+                    $dateKey = null;
+                }
+            }
+            $timeline->push([
+                'date' => $dateRaw ?: '—',
+                'description' => $payment['description'] ?? 'Payment',
+                'type' => 'payment',
+                'status' => 'Paid',
+                'amount' => 0.0,
+                'formatted_amount' => CurrencyHelper::formatCurrency(0),
+                'paid_amount' => $amount,
+                'formatted_paid_amount' => $payment['formatted_amount'] ?? CurrencyHelper::formatCurrency($amount),
+                'date_key' => $dateKey,
+                'sort_group' => 3,
+            ]);
+        }
+
+        $timeline = $timeline
+            ->sortBy([
+                ['date_key', 'asc'],
+                ['sort_group', 'asc'],
+            ])
+            ->values()
+            ->map(function ($row) {
+                unset($row['date_key'], $row['sort_group']);
+                return $row;
+            })
+            ->all();
+
+        $txnTotal = array_reduce($rows, fn ($sum, $r) => $sum + (float) ($r['amount'] ?? 0), 0.0);
+        $paymentTotal = array_reduce($paymentHistory, fn ($sum, $r) => $sum + (float) ($r['amount'] ?? 0), 0.0);
+        $netDue = max(0.0, round($txnTotal - $paymentTotal, 2));
+
+        $userName = $card->user?->name ?? 'Cardholder';
+        $dueDateLabel = '—';
+        if ($card->due_day) {
+            $periodEnd = $to->copy();
+            $dueDate = $periodEnd->copy()->addMonth()->day(min((int) $card->due_day, $periodEnd->copy()->addMonth()->daysInMonth));
+            $dueDateLabel = $dueDate->format('F j, Y');
+        }
+
+        return [
+            'card' => $card,
+            'userName' => $userName,
+            'transactions' => $rows,
+            'timeline' => $timeline,
+            'paymentHistory' => $paymentHistory,
+            'statementMonthLabel' => Carbon::createFromFormat('Y-m', $month)->format('F Y'),
+            'periodStart' => $from->format('M j, Y'),
+            'periodEnd' => $to->format('M j, Y'),
+            'dueDateLabel' => $dueDateLabel,
+            'txnTotal' => round($txnTotal, 2),
+            'paymentTotal' => round($paymentTotal, 2),
+            'netDue' => $netDue,
+        ];
+    }
+
+    private function isSoaMonthAvailable(Card $card, string $month): bool
+    {
+        $statementDay = (int) ($card->statement_day ?? 1);
+        $statementDay = max(1, min(31, $statementDay));
+        [, $periodEnd] = StatementPeriodHelper::periodForYearMonth($month, $statementDay);
+        return $periodEnd->endOfDay()->lte(now()->endOfDay());
     }
 }
 

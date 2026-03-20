@@ -11,7 +11,7 @@ import { useForm, usePage, router } from '@inertiajs/react';
 const PAYMENT_TYPE_FULL = 'full';
 const PAYMENT_TYPE_INSTALLMENT = 'installment';
 
-function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
+function InstallmentPaidModal({ expense, onClose, onMonthToggled, initialMonth = null }) {
     const { props } = usePage();
     const csrfToken = props?.csrf_token ?? '';
     const months = expense?.payment_term_months ?? 0;
@@ -22,6 +22,7 @@ function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
 
     const [toggling, setToggling] = useState(false);
     const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(null);
     const [payModalMonth, setPayModalMonth] = useState(null);
     const [amountPaid, setAmountPaid] = useState('');
     const [unpayConfirmMonth, setUnpayConfirmMonth] = useState(null);
@@ -48,6 +49,17 @@ function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
     };
 
     const isExtraPayment = payModalMonth != null && payModalMonth > months;
+
+    useEffect(() => {
+        if (!initialMonth || !expense) return;
+        const m = Number(initialMonth);
+        if (!Number.isFinite(m) || m < 1 || m > months) return;
+        if (isPaid(m)) return;
+        if (!canPayMonth(m)) return;
+        setPayModalMonth(m);
+        setAmountPaid(String(amountRequiredForMonth(m)));
+        setError(null);
+    }, [initialMonth, expense?.id]);
     const submitPayMonth = async () => {
         if (payModalMonth == null || toggling) return;
         const minAmount = isExtraPayment ? 0 : amountRequiredForMonth(payModalMonth);
@@ -58,6 +70,7 @@ function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
         }
         setToggling(true);
         setError(null);
+        setSuccess(null);
         try {
             const res = await fetch(`/expenses/${expense.id}/paid-month`, {
                 method: 'POST',
@@ -78,6 +91,7 @@ function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
             if (onMonthToggled) {
                 onMonthToggled(expense.id, data);
             }
+            setSuccess(data.message || 'Payment recorded successfully.');
             setPayModalMonth(null);
             setAmountPaid('');
         } finally {
@@ -89,6 +103,7 @@ function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
         if (toggling) return;
         setToggling(true);
         setError(null);
+        setSuccess(null);
         setUnpayConfirmMonth(null);
         try {
             const res = await fetch(`/expenses/${expense.id}/paid-month`, {
@@ -110,6 +125,7 @@ function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
             if (onMonthToggled) {
                 onMonthToggled(expense.id, data);
             }
+            setSuccess(data.message || 'Payment updated successfully.');
         } finally {
             setToggling(false);
         }
@@ -123,6 +139,11 @@ function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
             {error && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                     {error}
+                </div>
+            )}
+            {success && (
+                <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                    {success}
                 </div>
             )}
             <div className="flex flex-wrap gap-2">
@@ -206,7 +227,7 @@ function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
             {payModalMonth != null && (
                 <div className="rounded-lg border border-[#1E3A8A]/30 bg-[#F3F4F6] p-4 space-y-3">
                     <p className="text-xs font-medium text-[#1E3A8A]">
-                        {isExtraPayment ? `Extra payment — any amount will reduce balance (credit)` : `Month ${payModalMonth} — Enter amount paid`}
+                        {isExtraPayment ? 'Extra Payment' : `Month ${payModalMonth} — Payment`}
                     </p>
                     {!isExtraPayment && (
                         <div className="text-xs text-[#1E3A8A]/80">
@@ -216,16 +237,26 @@ function InstallmentPaidModal({ expense, onClose, onMonthToggled }) {
                     )}
                     <div>
                         <label className="block text-xs font-medium text-[#1E3A8A] mb-1">
-                            {isExtraPayment ? 'Amount paid (optional; creates credit if overpaid)' : 'Amount paid (cannot be lower than due)'}
+                            {isExtraPayment ? 'Amount paid (optional; creates credit if overpaid)' : 'Amount paid (exact amount due)'}
                         </label>
                         <input
                             type="number"
                             step="0.01"
                             min={isExtraPayment ? 0 : amountRequiredForMonth(payModalMonth)}
+                            max={isExtraPayment ? undefined : amountRequiredForMonth(payModalMonth)}
                             value={amountPaid}
-                            onChange={(e) => setAmountPaid(e.target.value)}
+                            onChange={(e) => {
+                                if (!isExtraPayment) return;
+                                setAmountPaid(e.target.value);
+                            }}
+                            readOnly={!isExtraPayment}
                             className="w-full rounded-lg border border-[#1E3A8A]/20 px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                         />
+                        {!isExtraPayment && (
+                            <p className="mt-1 text-[11px] text-[#1E3A8A]/70">
+                                Monthly installment payment is fixed and cannot be edited.
+                            </p>
+                        )}
                     </div>
                     <div className="flex gap-2 justify-end">
                         <button
@@ -480,6 +511,7 @@ export default function ExpensesIndex() {
     const [localExpenses, setLocalExpenses] = useState(expenses ?? []);
     const [modalState, setModalState] = useState({ open: false, expense: null });
     const [paidModalExpense, setPaidModalExpense] = useState(null);
+    const [paidModalInitialMonth, setPaidModalInitialMonth] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState({ open: false, url: null });
     const [confirmPaid, setConfirmPaid] = useState({ open: false, row: null });
 
@@ -515,6 +547,26 @@ export default function ExpensesIndex() {
             setModalState({ open: true, expense: null });
         }
     }, [openModal?.context, openModal?.id, expenses]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const params = new URLSearchParams(window.location.search);
+        const expenseParam = params.get('expense');
+        const monthParam = params.get('month');
+        if (!expenseParam) return;
+        const targetId = Number(expenseParam);
+        if (!Number.isFinite(targetId)) return;
+        const target = (expenses ?? []).find((e) => Number(e.id) === targetId);
+        if (!target) return;
+        if (target.payment_type !== 'installment') return;
+
+        setPaidModalExpense(target);
+        const monthNum = monthParam ? Number(monthParam) : null;
+        setPaidModalInitialMonth(Number.isFinite(monthNum) ? monthNum : null);
+
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+    }, [expenses]);
 
     const openCreate = () => setModalState({ open: true, expense: null });
     const openEdit = (expense) => setModalState({ open: true, expense });
@@ -853,13 +905,20 @@ export default function ExpensesIndex() {
             <Modal
                 title="Months paid"
                 open={!!paidModalExpense}
-                onClose={() => setPaidModalExpense(null)}
+                onClose={() => {
+                    setPaidModalExpense(null);
+                    setPaidModalInitialMonth(null);
+                }}
             >
                 {paidModalExpense && (
                     <InstallmentPaidModal
                         expense={paidModalExpense}
-                        onClose={() => setPaidModalExpense(null)}
+                        onClose={() => {
+                            setPaidModalExpense(null);
+                            setPaidModalInitialMonth(null);
+                        }}
                         onMonthToggled={handleMonthToggled}
+                        initialMonth={paidModalInitialMonth}
                     />
                 )}
             </Modal>

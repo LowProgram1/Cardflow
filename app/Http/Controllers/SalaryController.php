@@ -294,13 +294,19 @@ class SalaryController extends Controller
             'from' => ['required', 'date'],
             'to' => ['required', 'date', 'after_or_equal:from'],
             'employment_type' => ['nullable', 'string', 'in:full_time,part_time'],
+            'student_name' => ['nullable', 'string', 'max:150'],
+            'salary_class_id' => ['nullable', 'integer'],
         ]);
         $from = $validated['from'];
         $to = $validated['to'];
         $employmentType = $validated['employment_type'] ?? null;
+        $studentName = $validated['student_name'] ?? null;
+        $salaryClassId = isset($validated['salary_class_id']) && $validated['salary_class_id'] !== ''
+            ? (int) $validated['salary_class_id']
+            : null;
 
         if ($employmentType === 'part_time') {
-            return $this->exportPartTimePdf($from, $to);
+            return $this->exportPartTimePdf($from, $to, $studentName);
         }
 
         $query = SalaryPayment::query()
@@ -310,37 +316,56 @@ class SalaryController extends Controller
             ->whereBetween('schedule', [$from, $to])
             ->where('employment_type', 'full_time');
 
+        if ($salaryClassId !== null) {
+            $class = SalaryClass::query()
+                ->where('id', $salaryClassId)
+                ->where('user_id', $this->userId())
+                ->firstOrFail();
+            $query->where('salary_class_id', $class->id);
+        } else {
+            $class = null;
+        }
+
         $payments = $query->orderBy('schedule')
             ->orderBy('time_start')
             ->get()
             ->map(fn (SalaryPayment $p) => $this->mapPaymentToRow($p));
 
         $totalAmount = $payments->sum('amount_paid_display');
-        $filename = 'salary-payments-full-time-' . $from . '-to-' . $to . '.pdf';
 
         $pdf = Pdf::loadView('salary.full-time-payments-pdf', [
             'payments' => $payments,
             'from' => $from,
             'to' => $to,
             'totalAmount' => $totalAmount,
-        ]);
-        return $pdf->download($filename);
+            'teacherName' => auth()->user()?->name ?? '—',
+            'classId' => $class?->id,
+        ])->setPaper('a4');
+        return $pdf->stream('salary-payments-full-time-' . $from . '-to-' . $to . '.pdf');
     }
 
-    private function exportPartTimePdf(string $from, string $to)
+    private function exportPartTimePdf(string $from, string $to, ?string $studentName = null)
     {
-        $payments = PartTimePayment::query()
+        $query = PartTimePayment::query()
             ->with('partTime')
             ->where('user_id', $this->userId())
             ->whereBetween('schedule', [$from, $to])
             ->orderBy('schedule')
-            ->orderBy('id')
-            ->get()
+            ->orderBy('id');
+
+        if ($studentName !== null && trim($studentName) !== '') {
+            $query->whereHas('partTime', function ($q) use ($studentName) {
+                $q->where('student_name', $studentName);
+            });
+        }
+
+        $payments = $query->get()
             ->map(function (PartTimePayment $p) {
                 $pt = $p->partTime;
-                $scheduleFormatted = $p->schedule ? $p->schedule->format('D-d-m-Y') : '—';
+                $scheduleDate = $p->schedule ? $p->schedule->format('Y-m-d') : null;
                 return [
-                    'schedule' => $scheduleFormatted,
+                    'schedule' => $scheduleDate,
+                    'schedule_date' => $scheduleDate,
                     'student_name' => $pt?->student_name ?? '—',
                     'hours' => (float) $p->hours,
                     'rate_per_hr' => $pt ? (float) $pt->rate_per_hr : 0,
@@ -351,15 +376,17 @@ class SalaryController extends Controller
             ->all();
 
         $totalAmount = collect($payments)->sum('amount_paid');
-        $filename = 'salary-payments-part-time-' . $from . '-to-' . $to . '.pdf';
+        $safeStudent = $studentName ? '-' . str_replace(' ', '-', strtolower($studentName)) : '';
 
         $pdf = Pdf::loadView('salary.part-time-payments-pdf', [
             'payments' => $payments,
             'from' => $from,
             'to' => $to,
             'totalAmount' => $totalAmount,
-        ]);
-        return $pdf->download($filename);
+            'studentName' => $studentName,
+            'teacherName' => auth()->user()?->name ?? '—',
+        ])->setPaper('a4');
+        return $pdf->stream('salary-payments-part-time' . $safeStudent . '-' . $from . '-to-' . $to . '.pdf');
     }
 
     private function mapPaymentToRow(SalaryPayment $p): array

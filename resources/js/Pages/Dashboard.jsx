@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 
 const INITIAL_VISIBLE_COUNT = 5;
 
@@ -13,35 +13,35 @@ function PaymentHistory({ transactionHistory }) {
     return (
         <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-[#1E3A8A]">Payment history</h2>
+                <h2 className="text-sm font-semibold text-[#1E3A8A]">Transaction History</h2>
                 <span className="text-[11px] text-[#1E3A8A]/50">
-                    {total ? `${total} paid` : 'No data'}
+                    {total ? `${total} transactions` : 'No data'}
                 </span>
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left">
                     <thead>
                         <tr className="border-b border-[#1E3A8A]/20 text-[#1E3A8A]/70">
-                            <th className="py-2 pr-3 font-semibold">User</th>
-                            <th className="py-2 pr-3 font-semibold">Amount paid</th>
-                            <th className="py-2 pr-3 font-semibold">Date paid</th>
-                            <th className="py-2 font-semibold">Description</th>
+                            <th className="py-2 pr-3 font-semibold">Card No.</th>
+                            <th className="py-2 pr-3 font-semibold">Posted Date</th>
+                            <th className="py-2 pr-3 font-semibold">Amount</th>
+                            <th className="py-2 font-semibold">Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         {total === 0 && (
                             <tr>
                                 <td colSpan={4} className="py-4 text-[#1E3A8A]/60 text-center">
-                                    Paid expenses and payments will appear here.
+                                    Expense and payment transactions will appear here.
                                 </td>
                             </tr>
                         )}
                         {visible.map((row) => (
                             <tr key={row.id} className="border-b border-[#1E3A8A]/10 hover:bg-[#1E3A8A]/5">
-                                <td className="py-2 pr-3 text-[#1E3A8A]">{row.user_name ?? '—'}</td>
-                                <td className="py-2 pr-3 font-medium text-[#2563EB]">{row.formatted_amount_paid}</td>
+                                <td className="py-2 pr-3 text-[#1E3A8A]">{row.card_last_four ? `•••• ${row.card_last_four}` : '—'}</td>
                                 <td className="py-2 pr-3 text-[#1E3A8A]/80">{row.date_paid ?? row.transaction_date ?? '—'}</td>
-                                <td className="py-2 text-[#1E3A8A]/80">{row.description ?? '—'}</td>
+                                <td className="py-2 pr-3 font-medium text-[#2563EB]">{row.formatted_amount_paid}</td>
+                                <td className="py-2 text-[#1E3A8A]/80 capitalize">{row.status ?? 'expense'}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -70,38 +70,39 @@ function ExpenseList({ items }) {
 
     return (
         <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
-            <div className="space-y-2 text-xs">
-                {visible.map((item) => (
-                    <div
-                        key={`${item.payment_type}-${item.id}`}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#1E3A8A]/20 bg-white px-3 py-2"
-                    >
-                        <div>
-                            <div className="font-medium text-[#1E3A8A]">
-                                {item.expense_type_name || (item.payment_type === 'full' ? 'Full payment' : 'Installment')} · {item.card_name}
-                                {item.payment_type === 'full' && (
-                                    <span className="ml-1 text-[11px] text-[#1E3A8A]/50">(1 mo)</span>
-                                )}
-                                {item.user_name && item.user_name !== '—' && (
-                                    <span className="ml-1 text-[11px] text-[#1E3A8A]/60">· {item.user_name}</span>
-                                )}
-                            </div>
-                            <div className="text-[11px] text-[#1E3A8A]/60">
-                                {item.transaction_date}
-                                {item.payment_type === 'installment' && ` · ${item.months} mo × ${item.formatted_monthly}`}
-                                {item.payment_type === 'full' && ` · ${item.formatted_monthly}`}
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-4 text-right">
-                            <span className="text-green-700 font-medium" title="Paid so far">
-                                {item.paid_months_count}/{item.months} paid · {item.formatted_total_paid}
-                            </span>
-                            <span className="text-amber-800 font-medium" title="Remaining">
-                                {item.formatted_remaining} left
-                            </span>
-                        </div>
-                    </div>
-                ))}
+            <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                    <thead>
+                        <tr className="border-b border-[#1E3A8A]/20 text-[#1E3A8A]/70">
+                            <th className="py-2 pr-3 font-semibold">Statement Month</th>
+                            <th className="py-2 pr-3 font-semibold">Card Name</th>
+                            <th className="py-2 pr-3 font-semibold">Card No.</th>
+                            <th className="py-2 pr-3 font-semibold">To Pay</th>
+                            <th className="py-2 font-semibold">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {visible.map((item) => {
+                            const amount = Number(item.remaining ?? item.to_pay ?? 0);
+                            const pending = amount > 0;
+                            const advance = amount < 0;
+                            const cardLabel = `${item.card_name ?? '—'}${item.card_last_four ? ` - •••• ${item.card_last_four}` : ''}`;
+                            return (
+                                <tr key={item.id} className="border-b border-[#1E3A8A]/10 hover:bg-[#1E3A8A]/5">
+                                    <td className="py-2 pr-3 text-[#1E3A8A]">{item.statement_month_label ?? item.month_label ?? '—'}</td>
+                                    <td className="py-2 pr-3 text-[#1E3A8A]">{cardLabel}</td>
+                                    <td className="py-2 pr-3 text-[#1E3A8A]/80">{item.card_last_four ? `•••• ${item.card_last_four}` : '—'}</td>
+                                    <td className="py-2 pr-3 font-medium text-[#2563EB]">{item.formatted_remaining ?? item.formatted_to_pay ?? '—'}</td>
+                                    <td className="py-2">
+                                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${pending ? 'bg-amber-100 text-amber-800' : advance ? 'bg-sky-100 text-sky-700' : 'bg-green-100 text-green-700'}`}>
+                                            {pending ? 'Pending' : advance ? 'Advance' : 'Paid'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
             {hasMore && (
                 <div className="mt-3 flex justify-center">
@@ -123,10 +124,35 @@ export default function Dashboard() {
     const metrics = props?.metrics ?? { formatted_total_outstanding: '—', total_users: 0, active_cards: 0 };
     const cards = Array.isArray(props?.cards) ? props.cards : [];
     const transactionHistory = Array.isArray(props?.transactionHistory) ? props.transactionHistory : [];
-    const installmentExpenses = Array.isArray(props?.installmentExpenses) ? props.installmentExpenses : [];
-    const installmentSummary = props?.installmentSummary ?? { formatted_total_remaining: '—' };
-    const remainingByUser = Array.isArray(props?.remainingByUser) ? props.remainingByUser : [];
+    const remainingByCard = Array.isArray(props?.remainingByCard) ? props.remainingByCard : [];
     const isAdmin = props?.isAdmin === true;
+    const canViewCards = props?.canViewCards !== false;
+    const canViewExpenses = props?.canViewExpenses !== false;
+
+    // Keep client dashboard fresh when expenses are updated from another account/tab.
+    useEffect(() => {
+        if (isAdmin) return;
+        const reloadDashboard = () => {
+            router.reload({
+                only: ['metrics', 'cards', 'remainingByCard', 'transactionHistory', 'installmentExpenses', 'installmentSummary'],
+                preserveScroll: true,
+            });
+        };
+
+        const onFocus = () => reloadDashboard();
+        window.addEventListener('focus', onFocus);
+
+        const interval = setInterval(() => {
+            if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+                reloadDashboard();
+            }
+        }, 30000);
+
+        return () => {
+            window.removeEventListener('focus', onFocus);
+            clearInterval(interval);
+        };
+    }, [isAdmin]);
 
     return (
         <AppLayout>
@@ -135,17 +161,17 @@ export default function Dashboard() {
             </header>
 
             <section className="grid gap-4 sm:grid-cols-3 mb-6">
-                {isAdmin && (
                 <div className="rounded-2xl bg-[#2563EB] border border-[#2563EB] p-4 shadow-sm text-[#F3F4F6]">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-[#F3F4F6]/80 mb-1">Overall Outstanding Balance</div>
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-[#F3F4F6]/80 mb-1">
+                        {isAdmin ? 'Overall Monthly Outstanding Balance' : 'My Monthly Outstanding Balance'}
+                    </div>
                     <div className="text-2xl font-semibold text-[#F3F4F6]">
                         {metrics.formatted_total_outstanding ?? '—'}
                     </div>
                     <p className="mt-1 text-xs text-[#F3F4F6]/90">
-                        Total expenses minus payments; reduced when you mark installments or full payments as paid.
+                        {isAdmin ? 'Based on current-month card obligations only.' : 'Based on your current-month card obligations only.'}
                     </p>
                 </div>
-                )}
 
                 {metrics.total_users != null && (
                 <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
@@ -164,10 +190,10 @@ export default function Dashboard() {
                 )}
             </section>
 
-            {installmentExpenses.length > 0 && (
+            {canViewExpenses && (
                 <section className="mb-6">
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-semibold text-[#1E3A8A]">Expenses (installment & full payment)</h2>
+                        <h2 className="text-sm font-semibold text-[#1E3A8A]">Installment & Full Payment</h2>
                         {isAdmin && (
                         <Link
                             href="/expenses"
@@ -178,35 +204,38 @@ export default function Dashboard() {
                         )}
                     </div>
                     <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mb-4">
-                        {remainingByUser.length > 0 ? (
-                            remainingByUser.map((u) => (
-                                <div key={u.user_id ?? 'unknown'} className="rounded-2xl bg-amber-50 border border-amber-200 p-4 shadow-sm min-w-0">
-                                    <div className="text-[11px] uppercase tracking-[0.18em] text-amber-800/80 mb-1">Remaining · {u.user_name}</div>
-                                    <div className="text-xl font-semibold text-amber-900">
-                                        {u.formatted_remaining}
+                        {remainingByCard.map((c) => {
+                            const cardLabel = `${c.card_name ?? '—'}${c.card_last_four ? ` - •••• ${c.card_last_four}` : ''}`;
+                            const amount = Number(c.remaining ?? 0);
+                            const isPending = amount > 0;
+                            const isAdvance = amount < 0;
+                            return (
+                                <div key={c.card_id ?? 'unknown'} className="rounded-2xl bg-amber-50 border border-amber-200 p-4 shadow-sm min-w-0">
+                                    <div className="text-[11px] uppercase tracking-[0.18em] text-amber-800/80 mb-1">
+                                        Monthly Outstanding
                                     </div>
-                                    <p className="mt-1 text-xs text-amber-800/90">Outstanding balance for this user.</p>
+                                    <div className="text-xs text-amber-900 mb-1 truncate">{cardLabel}</div>
+                                    <div className="text-xl font-semibold text-amber-900">
+                                        {c.formatted_remaining ?? '0.00'}
+                                    </div>
+                                    <p className="mt-1 text-xs text-amber-800/90">
+                                        {isPending ? 'Pending for current statement month.' : isAdvance ? 'Advance payment credit for upcoming statement month.' : 'Paid for current statement month.'}
+                                    </p>
                                 </div>
-                            ))
-                        ) : (
-                            <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 shadow-sm">
-                                <div className="text-[11px] uppercase tracking-[0.18em] text-amber-800/80 mb-1">Remaining to pay</div>
-                                <div className="text-xl font-semibold text-amber-900">
-                                    {installmentSummary.formatted_total_remaining}
-                                </div>
-                                <p className="mt-1 text-xs text-amber-800/90">Outstanding amount.</p>
-                            </div>
-                        )}
+                            );
+                        })}
                     </div>
-                    <ExpenseList items={installmentExpenses} />
+                    <ExpenseList items={remainingByCard} />
                 </section>
             )}
 
-            <section className="mb-6">
-                <PaymentHistory transactionHistory={transactionHistory} />
-            </section>
+            {canViewExpenses && (
+                <section className="mb-6">
+                    <PaymentHistory transactionHistory={transactionHistory} />
+                </section>
+            )}
 
-            {isAdmin && (
+            {isAdmin && canViewCards && (
             <section className="grid gap-4 lg:grid-cols-1 mb-6">
                 <div className="rounded-2xl bg-[#F3F4F6] border border-[#1E3A8A]/20 p-4 shadow-sm">
                     <div className="flex items-center justify-between mb-3">

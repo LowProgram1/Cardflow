@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Expense;
+use App\Policies\ExpensePolicy;
 use App\Repositories\Contracts\CardRepositoryInterface;
 use App\Repositories\Contracts\ExpenseRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
@@ -19,6 +21,7 @@ use App\Services\UserService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -44,6 +47,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Gate::policy(Expense::class, ExpensePolicy::class);
+
         Password::defaults(function () {
             return Password::min(12)
                 ->letters()

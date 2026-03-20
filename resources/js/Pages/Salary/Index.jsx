@@ -505,6 +505,8 @@ export default function SalaryIndex() {
     const [pdfModalOpen, setPdfModalOpen] = useState(false);
     const [pdfRange, setPdfRange] = useState({ from: '', to: '' });
     const [pdfEmploymentType, setPdfEmploymentType] = useState('full_time');
+    const [pdfStudentName, setPdfStudentName] = useState('');
+    const [pdfClassId, setPdfClassId] = useState('');
     const [deleteConfirm, setDeleteConfirm] = useState({ open: false, url: null, title: '' });
     const [partTimePaymentModal, setPartTimePaymentModal] = useState({ open: false, item: null });
     const [partTimePaymentDeleteConfirm, setPartTimePaymentDeleteConfirm] = useState({ open: false, url: null });
@@ -704,6 +706,8 @@ export default function SalaryIndex() {
                                         const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
                                         setPdfRange({ from, to: todayYMD() });
                                         setPdfEmploymentType('full_time');
+                                        setPdfStudentName('');
+                                        setPdfClassId('');
                                         setPdfModalOpen(true);
                                     }}
                                     className="p-2 rounded-lg text-[#1E3A8A]/80 hover:bg-[#1E3A8A]/10 hover:text-[#1E3A8A]"
@@ -736,6 +740,8 @@ export default function SalaryIndex() {
                                         const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
                                         setPdfRange({ from, to: todayYMD() });
                                         setPdfEmploymentType('part_time');
+                                        setPdfStudentName('');
+                                        setPdfClassId('');
                                         setPdfModalOpen(true);
                                     }}
                                     className="p-2 rounded-lg text-[#1E3A8A]/80 hover:bg-[#1E3A8A]/10 hover:text-[#1E3A8A]"
@@ -838,13 +844,47 @@ export default function SalaryIndex() {
                             className="w-full rounded-lg border border-[#1E3A8A]/20 px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                         />
                     </FormField>
+                    {pdfEmploymentType === 'part_time' && (
+                        <FormField label="Student name (optional)" error={null}>
+                            <select
+                                value={pdfStudentName}
+                                onChange={(e) => setPdfStudentName(e.target.value)}
+                                className="w-full rounded-lg border border-[#1E3A8A]/20 px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                            >
+                                <option value="">All students</option>
+                                {[...new Set((partTimes ?? []).map((p) => p.student_name).filter(Boolean))].sort().map((name) => (
+                                    <option key={name} value={name}>{name}</option>
+                                ))}
+                            </select>
+                        </FormField>
+                    )}
+                    {pdfEmploymentType === 'full_time' && (
+                        <FormField label="Class (optional)" error={null}>
+                            <select
+                                value={pdfClassId}
+                                onChange={(e) => setPdfClassId(e.target.value)}
+                                className="w-full rounded-lg border border-[#1E3A8A]/20 px-3 py-2 text-xs text-[#1E3A8A] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                            >
+                                <option value="">All classes</option>
+                                {(classes ?? []).map((c) => (
+                                    <option key={c.id} value={c.id}>{c.class_name}</option>
+                                ))}
+                            </select>
+                        </FormField>
+                    )}
                     <div className="flex justify-end gap-2 pt-2">
                         <button type="button" onClick={() => setPdfModalOpen(false)} className="rounded-lg border border-[#1E3A8A]/20 px-3 py-1.5 text-xs text-[#1E3A8A] hover:bg-[#1E3A8A]/10">Cancel</button>
                         <button
                             type="button"
                             onClick={() => {
                                 if (!pdfRange.from || !pdfRange.to) return;
-                                const url = `/salary/export-pdf?from=${encodeURIComponent(pdfRange.from)}&to=${encodeURIComponent(pdfRange.to)}&employment_type=${encodeURIComponent(pdfEmploymentType)}`;
+                                const studentParam = pdfEmploymentType === 'part_time' && pdfStudentName
+                                    ? `&student_name=${encodeURIComponent(pdfStudentName)}`
+                                    : '';
+                                const classParam = pdfEmploymentType === 'full_time' && pdfClassId
+                                    ? `&salary_class_id=${encodeURIComponent(pdfClassId)}`
+                                    : '';
+                                const url = `/salary/export-pdf?from=${encodeURIComponent(pdfRange.from)}&to=${encodeURIComponent(pdfRange.to)}&employment_type=${encodeURIComponent(pdfEmploymentType)}${studentParam}${classParam}`;
                                 window.open(url, '_blank');
                                 setPdfModalOpen(false);
                             }}

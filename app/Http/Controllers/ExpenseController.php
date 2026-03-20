@@ -10,11 +10,13 @@ use App\Models\Expense;
 use App\Models\ExpenseType;
 use App\Models\User;
 use App\Models\PaymentTerm;
+use App\Helpers\InstallmentTermHelper;
 use App\Services\Contracts\CardServiceInterface;
 use App\Services\Contracts\ExpenseServiceInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Response as InertiaResponse;
 
 class ExpenseController extends Controller
@@ -83,7 +85,7 @@ class ExpenseController extends Controller
         });
 
         if ($isAdmin) {
-            $cardOptions = $this->cards->allActiveForExpenseLinking()->map(function (Card $card) {
+            $cardOptions = $this->cards->allActiveForExpenseLinking(true)->map(function (Card $card) {
                 $userName = $card->user?->name ?? 'User #' . $card->user_id;
                 $masked = $card->last_four ? '****' . $card->last_four : '****';
                 return [
@@ -125,11 +127,14 @@ class ExpenseController extends Controller
     {
         $data = $request->validated();
         $user = auth()->user();
-        if (($user->role ?? 'admin') !== 'admin') {
+        $isAdmin = ($user->role ?? 'admin') === 'admin';
+        if (! $isAdmin) {
             $data['user_id'] = $user->id;
         } else {
             $data['user_id'] = (int) ($data['user_id'] ?? $user->id);
         }
+
+        Gate::authorize('assignCardForExpense', [Expense::class, (int) $data['user_id'], (int) $data['card_id']]);
         $data['type'] = $data['type'] ?? 'expense';
 
         if (($data['payment_type'] ?? 'full') === 'installment' && ! empty($data['payment_term_id']) && ! empty($data['monthly_amortization'])) {
@@ -151,15 +156,17 @@ class ExpenseController extends Controller
     public function update(ExpenseUpdateRequest $request, Expense $expense): RedirectResponse
     {
         $user = auth()->user();
-        if (($user->role ?? 'admin') !== 'admin' && $expense->user_id != $user->id) {
+        $isAdmin = ($user->role ?? 'admin') === 'admin';
+        if (! $isAdmin && $expense->user_id != $user->id) {
             abort(403, 'You can only edit your own expenses.');
         }
         $data = $request->validated();
-        if (($user->role ?? 'admin') !== 'admin') {
+        if (! $isAdmin) {
             $data['user_id'] = $user->id;
         } else {
             $data['user_id'] = (int) ($data['user_id'] ?? $expense->user_id);
         }
+        Gate::authorize('assignCardForExpense', [Expense::class, (int) $data['user_id'], (int) $data['card_id']]);
         $data['type'] = $data['type'] ?? $expense->type ?? 'expense';
 
         if (($data['payment_type'] ?? 'full') === 'installment' && ! empty($data['payment_term_id']) && ! empty($data['monthly_amortization'])) {
@@ -238,7 +245,7 @@ class ExpenseController extends Controller
 
         // Installment: require previous months paid; when marking paid, require amount_paid >= amount_required
         $term = $expense->paymentTerm;
-        $termMonths = $term ? (int) $term->months : 0;
+        $termMonths = $term ? InstallmentTermHelper::resolveInstallmentTermMonths($expense) : 0;
         if (! $term || $month < 1) {
             if ($request->wantsJson()) {
                 return response()->json(['message' => 'Invalid month for this term.'], 422);
@@ -335,7 +342,23 @@ class ExpenseController extends Controller
             return redirect()->route('expenses.index')->with('flash', ['type' => 'error', 'message' => 'Amount paid is required.']);
         }
         $amountPaid = (float) $amountPaid;
-        if ($amountPaid < $amountRequired) {
+        if (! $isExtraPayment) {
+            // Installment month payment must be exact to keep the schedule deterministic.
+            if (abs($amountPaid - $amountRequired) > 0.009) {
+                if ($request->wantsJson()) {
+                    return response()->json([
+                        'message' => 'Amount paid must exactly match the amount due for this month.',
+                        'amount_required' => $amountRequired,
+                        'formatted_amount_required' => CurrencyHelper::formatCurrency($amountRequired),
+                    ], 422);
+                }
+
+                return redirect()->route('expenses.index')->with('flash', [
+                    'type' => 'error',
+                    'message' => 'Amount paid must exactly match ' . CurrencyHelper::formatCurrency($amountRequired) . '.',
+                ]);
+            }
+        } elseif ($amountPaid < $amountRequired) {
             if ($request->wantsJson()) {
                 return response()->json([
                     'message' => 'Amount paid cannot be lower than the amount due.',
@@ -373,6 +396,7 @@ class ExpenseController extends Controller
                 'formatted_remaining' => CurrencyHelper::formatCurrency($remaining),
                 'total_paid' => $effectivePaid,
                 'formatted_total_paid' => CurrencyHelper::formatCurrency($effectivePaid),
+                'message' => 'Payment recorded successfully.',
             ]);
         }
 
@@ -392,7 +416,7 @@ class ExpenseController extends Controller
             return [];
         }
         $monthly = round((float) $expense->monthly_amortization, 2);
-        $term = (int) $expense->paymentTerm->months;
+        $term = InstallmentTermHelper::resolveInstallmentTermMonths($expense);
         $amounts = $expense->paid_month_amounts ?? [];
         $amounts = array_map(
             fn ($v) => round((float) $v, 2),
@@ -491,7 +515,7 @@ class ExpenseController extends Controller
             return in_array(1, $paidMonths, true) ? $amount : 0.0;
         }
         $monthly = round((float) $expense->monthly_amortization, 2);
-        $term = (int) $expense->paymentTerm->months;
+        $term = InstallmentTermHelper::resolveInstallmentTermMonths($expense);
         $reqs = $this->monthRequirementsForExpense($expense);
         $total = 0.0;
         foreach ($reqs as $r) {
