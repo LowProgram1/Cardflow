@@ -13,7 +13,9 @@ class ForgotPasswordController extends Controller
 {
     public function show(): InertiaResponse
     {
-        return Inertia::render('Auth/ForgotPassword');
+        return Inertia::render('Auth/ForgotPassword', [
+            'initialEmail' => request()->query('email', ''),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse

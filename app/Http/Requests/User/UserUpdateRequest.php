@@ -30,6 +30,5 @@ class UserUpdateRequest extends FormRequest
             'feature_ids.*' => ['integer', 'exists:features,id'],
         ];
     }
-
-    }
+}
 

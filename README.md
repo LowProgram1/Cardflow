@@ -22,6 +22,9 @@
 | Area | Function | Description |
 |------|----------|-------------|
 | **Auth** | Login / Logout | Session-based authentication; shared `auth.user` and `auth.isAdmin` for frontend; logout invalidates session and redirects to login. |
+| **Auth** | Register & email verification | New users register at `/register`; a signed link is emailed (`VerifyRegistrationMail`). Users **cannot log in** until `email_verified_at` is set via the link (`/register/verify/{user}`). Mail is sent **after the HTTP response** (no queue worker required for that step). Set `MAIL_*` and `APP_URL` in `.env`. |
+| **Auth** | Forgot password | Password reset emails use the same **after-response** pattern as registration so delivery does not depend on `queue:work`. Configure SMTP in `.env`. |
+| **Auth** | Login lockout | After several failed password attempts, the user is directed to reset their password (see `LoginController`). |
 | **Auth** | Session/CSRF expiry (419) | When the session or CSRF token has expired, the app redirects to the login page instead of showing the "419 | PAGE EXPIRED" error. Handled server-side in `bootstrap/app.php` (TokenMismatchException and HttpException 419 → redirect to login) and client-side in `resources/js/bootstrap.js` (fetch wrapper redirects on 419 for XHR requests). |
 | **Auth** | Auto-logout (inactivity) | After 5 minutes of no mouse/keyboard/scroll/touch activity (configurable via `SESSION_LIFETIME` in .env), the user is logged out and redirected to login with an “inactivity” message. When the tab was in the background, logout runs on returning to the tab. Applies to both admin and user. |
 | **Roles** | Admin vs User | Backend: `auth.isAdmin` and `role`; middleware `admin` protects `/users` and `/expenses`. Sidebar shows Users & Expenses only when `auth.isAdmin` is true. |
@@ -143,8 +146,8 @@ See **[docs/MIGRATION.md](docs/MIGRATION.md)** for the full ordered list and des
 3. Run migrations: `php artisan migrate` (see [docs/MIGRATION.md](docs/MIGRATION.md)).
 4. (Optional) Set `SESSION_LIFETIME=5` in `.env` for idle timeout in minutes (default 5; auto-logout after inactivity for both admin and user).
 5. (Optional) For production over HTTPS: set `SESSION_SECURE_COOKIE=true` and `SESSION_SAME_SITE=lax` in `.env`.
-6. (Optional) Seed: `php artisan db:seed` or specific seeders (CardTypeSeeder, ExpenseTypeSeeder, PaymentTermSeeder).
-7. Create an admin user (or ensure existing user has `role = 'admin'` in `users` table; null/missing role is treated as admin).
+6. (Optional) Seed reference data: `php artisan db:seed` or specific seeders (e.g. CardType, ExpenseType, PaymentTerm — see [docs/MIGRATION.md](docs/MIGRATION.md)).
+7. **Admin user:** Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env`, then run `php artisan config:clear` and `php artisan db:seed --class=AdminUserSeeder`. (Or create a user with `role = 'admin'` in the database; the admin middleware treats null/missing `role` as admin for legacy rows.)
 8. Serve: `php artisan serve`; for dev with Vite: `npm run dev`.
 
 ### 6.1 Development: live reload (no need to stop server or run build)
@@ -173,7 +176,10 @@ For changes to PHP, Blade, or `.env`, a **browser refresh** is usually enough. Y
 
 ## 7. Repository
 
-Source code: [https://github.com/LowProgram1/Web-Applications.git](https://github.com/LowProgram1/Web-Applications.git)
+**Canonical repo:** [https://github.com/LowProgram1/Cardflow](https://github.com/LowProgram1/Cardflow)  
+Clone: `git clone https://github.com/LowProgram1/Cardflow.git`
+
+Deploy notes: [docs/DEPLOY_HOSTINGER.md](docs/DEPLOY_HOSTINGER.md)
 
 ---
 

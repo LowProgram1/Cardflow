@@ -20,7 +20,7 @@ Use Hostinger’s built-in **Git** feature so each push to GitHub can trigger a 
 
 ### 1. Prepare your GitHub repository
 
-- Code is on GitHub: [https://github.com/LowProgram1/Web-Applications.git](https://github.com/LowProgram1/Web-Applications.git)
+- Code is on GitHub: [https://github.com/LowProgram1/Cardflow.git](https://github.com/LowProgram1/Cardflow.git)
 - Ensure the branch you want to deploy (e.g. `main`) is up to date.
 
 ### 2. Connect GitHub in Hostinger (hPanel)
@@ -30,7 +30,7 @@ Use Hostinger’s built-in **Git** feature so each push to GitHub can trigger a 
 3. In the left sidebar, open **Git** (or **Advanced** → **Git**).
 4. Click **Create a new repository** (or equivalent).
 5. Set:
-   - **Repository address:** `https://github.com/LowProgram1/Web-Applications.git`  
+   - **Repository address:** `https://github.com/LowProgram1/Cardflow.git`  
      (for private repo, use SSH URL and add a deploy key in GitHub.)
    - **Branch:** `main` (or your production branch).
    - **Install path:**  
@@ -167,7 +167,7 @@ No webhook; you deploy by pulling on the server and running the script.
 3. Clone the repo:
 
    ```bash
-   git clone https://github.com/LowProgram1/Web-Applications.git cardflow
+   git clone https://github.com/LowProgram1/Cardflow.git cardflow
    cd cardflow
    ```
 
@@ -253,4 +253,4 @@ Make it executable once: `chmod +x deploy.sh`.
 
 - [Hostinger: Deploy a Git repository](https://support.hostinger.com/en/articles/1583302-how-to-deploy-a-git-repository-in-hostinger)
 - [Hostinger: Deploy to VPS using GitHub Actions](https://www.hostinger.com/support/deploy-to-hostinger-vps-using-github-actions/)
-- Repository: [https://github.com/LowProgram1/Web-Applications.git](https://github.com/LowProgram1/Web-Applications.git)
+- Repository: [https://github.com/LowProgram1/Cardflow.git](https://github.com/LowProgram1/Cardflow.git)

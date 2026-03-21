@@ -44,11 +44,22 @@ class RegisterController extends Controller
 
         $user->features()->sync(Feature::defaultFeatureIds());
 
+        // Send after HTTP response so signup stays fast. Runs synchronously in a terminating
+        // callback (no queue worker required — unlike Mail::queue() + database driver).
         try {
-            // Queue verification email to avoid blocking the request on SMTP/network issues.
-            Mail::to($user->email)->queue(new VerifyRegistrationMail($user));
+            dispatch(function () use ($user) {
+                try {
+                    Mail::to($user->email)->send(new VerifyRegistrationMail($user));
+                } catch (Throwable $e) {
+                    Log::warning('Registration verification email failed to send.', [
+                        'user_id' => $user->id,
+                        'email' => $user->email,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            })->afterResponse();
         } catch (Throwable $e) {
-            Log::warning('Failed to queue registration verification email.', [
+            Log::warning('Failed to schedule registration verification email.', [
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'error' => $e->getMessage(),

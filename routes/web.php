@@ -25,14 +25,18 @@ use App\Http\Controllers\StatementController;
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'show'])->name('login');
-    Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:auth')->name('login.store');
+    Route::post('/login', [LoginController::class, 'store'])->name('login.store');
     Route::get('/forgot-password', [ForgotPasswordController::class, 'show'])->name('password.request');
     Route::post('/forgot-password', [ForgotPasswordController::class, 'store'])->name('password.email')->middleware('throttle:auth');
     Route::get('/reset-password/{token}', [ResetPasswordController::class, 'show'])->name('password.reset');
     Route::post('/reset-password', [ResetPasswordController::class, 'store'])->name('password.update')->middleware('throttle:auth-sensitive');
     Route::get('/register', [RegisterController::class, 'show'])->name('register');
     Route::post('/register', [RegisterController::class, 'store'])->name('register.store')->middleware('throttle:auth');
-    Route::get('/register/verify/{user}', [VerifyRegistrationController::class, 'show'])->name('register.verify')->middleware('signed');
+    // Numeric {user} + int type-hint (not User $user) so route matches and `signed` runs before any DB lookup — implicit model binding caused 404 when the user row was missing/mismatched.
+    Route::get('/register/verify/{user}', [VerifyRegistrationController::class, 'show'])
+        ->whereNumber('user')
+        ->middleware('signed')
+        ->name('register.verify');
 });
 
 Route::middleware('auth')->group(function () {

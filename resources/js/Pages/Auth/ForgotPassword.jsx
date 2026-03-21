@@ -2,9 +2,9 @@ import React from 'react';
 import { Link, useForm, usePage } from '@inertiajs/react';
 
 export default function ForgotPassword() {
-    const { flash } = usePage().props;
+    const { flash, initialEmail } = usePage().props;
     const { data, setData, post, processing, errors } = useForm({
-        email: '',
+        email: initialEmail || '',
     });
 
     const submit = (e) => {

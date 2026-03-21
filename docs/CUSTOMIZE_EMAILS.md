@@ -2,6 +2,10 @@
 
 ## 1. Verification email (sign-up)
 
+**Delivery:** Registration sends the email **after the HTTP response** (`dispatch(...)->afterResponse()` + `Mail::send()`), so signup stays fast and you **do not need** `php artisan queue:work` for activation mail (unlike `Mail::queue()` with `QUEUE_CONNECTION=database`).
+
+**Login:** Users with `email_verified_at` null **cannot sign in** until they open the link in the email (`LoginController` enforces this).
+
 **Subject and “from”:**  
 Edit `app/Mail/VerifyRegistrationMail.php`.
 
@@ -23,6 +27,8 @@ Edit `resources/views/emails/verify-registration.blade.php`.
 
 ## 2. Password reset email
 
+The app sends the reset notification **after the HTTP response** (same pattern as registration), so you **do not need** `queue:work` for the reset email to go out.
+
 The app uses Laravel’s built-in password reset. To customize the email:
 
 **Option A – Override the notification (recommended)**
@@ -32,7 +38,7 @@ The app uses Laravel’s built-in password reset. To customize the email:
    php artisan make:mail ResetPasswordMail
    ```
    Or copy Laravel’s reset notification and change the view.  
-   Then in `app/Models/User.php`, in `sendPasswordResetNotification()`, send your custom mailable instead of `new ResetPassword($token)`.
+   Then in `app/Models/User.php`, adjust `sendPasswordResetNotification()` (it currently dispatches Laravel’s `ResetPassword` notification **after the response**; replace or wrap that call with your custom mail/notification).
 
 **Option B – Publish and edit Laravel’s view**
 
