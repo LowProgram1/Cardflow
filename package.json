@@ -4,8 +4,8 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite",
-        "start": "concurrently -n vite,laravel -c cyan,green \"npm run dev\" \"php artisan serve\""
+        "dev": "concurrently --kill-others-on-fail -n vite,laravel -c cyan,green \"vite\" \"php artisan serve\"",
+        "start": "npm run dev"
     },
     "dependencies": {
         "@inertiajs/progress": "^0.2.7",

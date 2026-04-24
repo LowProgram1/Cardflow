@@ -404,23 +404,27 @@ export default function CardsIndex() {
         if (unpaidMonthItems.length === 0 || payingAll) return;
         setPayingAll(true);
         setDrilldownError('');
-        try {
-            for (const tx of unpaidMonthItems) {
+        const errors = [];
+        for (const tx of unpaidMonthItems) {
+            try {
                 const payload = { month: Number(tx.month_number) };
                 if ((tx?.type ?? '') === 'installment') {
-                    payload.amount_paid = Number(tx.amount ?? 0);
+                    // Use due_amount (original charge for this month) not amount (remaining balance)
+                    payload.amount_paid = Number(tx.due_amount ?? tx.amount ?? 0);
                 }
                 await window.axios.post(`/expenses/${tx.expense_id}/paid-month`, payload, {
                     headers: { Accept: 'application/json' },
                 });
+            } catch (error) {
+                const message = error?.response?.data?.message || `Failed to pay item: ${tx.description ?? tx.expense_id}`;
+                errors.push(message);
             }
-            await refreshCardMonthData();
-        } catch (error) {
-            const message = error?.response?.data?.message || 'Failed to pay all month items.';
-            setDrilldownError(message);
-        } finally {
-            setPayingAll(false);
         }
+        await refreshCardMonthData();
+        if (errors.length > 0) {
+            setDrilldownError(errors.join(' | '));
+        }
+        setPayingAll(false);
     };
 
     return (
@@ -656,29 +660,43 @@ export default function CardsIndex() {
                                             <tr className="border-b border-[#1E3A8A]/15 text-left text-[#1E3A8A]/70">
                                                 <th className="py-2 pr-2">Date</th>
                                                 <th className="py-2 pr-2">Description</th>
-                                                <th className="py-2 pr-2">Type</th>
-                                                <th className="py-2">Amount</th>
+                                                <th className="py-2 pr-2">Charge</th>
+                                                <th className="py-2 pr-2">Balance</th>
+                                                <th className="py-2">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {monthTransactions.map((tx) => (
-                                                <tr key={tx.id} className="border-b border-[#1E3A8A]/10">
-                                                    <td className="py-2 pr-2 text-[#1E3A8A]/80">{tx.transaction_date ?? '—'}</td>
-                                                    <td className="py-2 pr-2 text-[#1E3A8A]">{tx.description ?? tx.expense_type_name ?? '—'}</td>
-                                                    <td className="py-2 pr-2 text-[#1E3A8A]/70">{tx.type}</td>
-                                                    <td className="py-2 text-[#2563EB] font-medium">{tx.formatted_amount}</td>
-                                                </tr>
-                                            ))}
+                                            {monthTransactions.map((tx) => {
+                                                const isPaid = tx.status === 'paid';
+                                                return (
+                                                    <tr key={tx.id} className="border-b border-[#1E3A8A]/10">
+                                                        <td className="py-2 pr-2 text-[#1E3A8A]/80">{tx.transaction_date ?? '—'}</td>
+                                                        <td className="py-2 pr-2 text-[#1E3A8A]">{tx.description ?? tx.expense_type_name ?? '—'}</td>
+                                                        <td className="py-2 pr-2 text-[#1E3A8A] font-medium">
+                                                            {tx.formatted_due_amount ?? tx.formatted_amount ?? '—'}
+                                                        </td>
+                                                        <td className="py-2 pr-2 text-[#2563EB] font-medium">
+                                                            {tx.formatted_amount ?? '—'}
+                                                        </td>
+                                                        <td className="py-2">
+                                                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                {isPaid ? 'Paid' : 'Unpaid'}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
                                             {monthTransactions.length === 0 && (
-                                                <tr><td className="py-3 text-[#1E3A8A]/70" colSpan={4}>No items for this month.</td></tr>
+                                                <tr><td className="py-3 text-[#1E3A8A]/70" colSpan={5}>No items for this month.</td></tr>
                                             )}
                                         </tbody>
                                         {monthTransactions.length > 0 && (
                                             <tfoot>
                                                 <tr className="border-t-2 border-[#1E3A8A]/20 bg-[#F3F4F6]">
                                                     <td className="py-2 pr-2" colSpan={3}>
-                                                        <span className="font-semibold text-[#1E3A8A]">Total</span>
+                                                        <span className="font-semibold text-[#1E3A8A]">Total remaining</span>
                                                     </td>
+                                                    <td className="py-2 font-semibold text-[#2563EB]">{selectedMonthTotalFormatted}</td>
                                                     <td className="py-2">
                                                         <button
                                                             type="button"
@@ -688,12 +706,16 @@ export default function CardsIndex() {
                                                             title={
                                                                 isSelectedMonthPayLocked
                                                                     ? `Pay ${firstPendingMonthValue} first`
-                                                                    : `Pay all for ${selectedMonth ?? 'selected month'}: ${selectedMonthTotalFormatted}`
+                                                                    : unpaidMonthItems.length === 0
+                                                                        ? 'All items paid'
+                                                                        : `Pay all for ${selectedMonth ?? 'selected month'}: ${selectedMonthTotalFormatted}`
                                                             }
                                                         >
                                                             {isSelectedMonthPayLocked
                                                                 ? `Pay ${firstPendingMonthValue} first`
-                                                                : (payingAll ? `Paying ${selectedMonthTotalFormatted}...` : `Pay ${selectedMonthTotalFormatted}`)}
+                                                                : unpaidMonthItems.length === 0
+                                                                    ? 'All paid'
+                                                                    : (payingAll ? `Paying...` : `Pay all`)}
                                                         </button>
                                                     </td>
                                                 </tr>

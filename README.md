@@ -25,8 +25,8 @@
 | **Auth** | Register & email verification | New users register at `/register`; a signed link is emailed (`VerifyRegistrationMail`). Users **cannot log in** until `email_verified_at` is set via the link (`/register/verify/{user}`). Mail is sent **after the HTTP response** (no queue worker required for that step). Set `MAIL_*` and `APP_URL` in `.env`. |
 | **Auth** | Forgot password | Password reset emails use the same **after-response** pattern as registration so delivery does not depend on `queue:work`. Configure SMTP in `.env`. |
 | **Auth** | Login lockout | After several failed password attempts, the user is directed to reset their password (see `LoginController`). |
-| **Auth** | Session/CSRF expiry (419) | When the session or CSRF token has expired, the app redirects to the login page instead of showing the "419 | PAGE EXPIRED" error. Handled server-side in `bootstrap/app.php` (TokenMismatchException and HttpException 419 → redirect to login) and client-side in `resources/js/bootstrap.js` (fetch wrapper redirects on 419 for XHR requests). |
-| **Auth** | Auto-logout (inactivity) | After 5 minutes of no mouse/keyboard/scroll/touch activity (configurable via `SESSION_LIFETIME` in .env), the user is logged out and redirected to login with an “inactivity” message. When the tab was in the background, logout runs on returning to the tab. Applies to both admin and user. |
+| **Auth** | Session/CSRF expiry (419) | When the session or CSRF token has expired, the app redirects to `/login` with a **303 See Other** (forces GET) instead of showing “419 \| PAGE EXPIRED”. Handled in `bootstrap/app.php` (`TokenMismatchException`, `HttpException 419`, and `AuthenticationException` all redirect via 303). A `login.method_fallback` route catches stray PUT/PATCH/DELETE to `/login` (from Inertia retrying after expiry) and returns 303. Client-side: `resources/js/bootstrap.js` redirects on 419 for XHR requests. |
+| **Auth** | Auto-logout (inactivity) | After `SESSION_LIFETIME` minutes of no mouse/keyboard/scroll/touch activity (default **120 minutes**; configurable in `.env`), the user is logged out and redirected to login with an “inactivity” message. When the tab was in the background, logout runs on returning to the tab. Applies to both admin and user. |
 | **Roles** | Admin vs User | Backend: `auth.isAdmin` and `role`; middleware `admin` protects `/users` and `/expenses`. Sidebar shows Users & Expenses only when `auth.isAdmin` is true. |
 | **Dashboard** | View summary | Role-dependent: admin sees full metrics and lists; user sees only their expense logs and payment history. |
 | **Dashboard** | Monthly outstanding with advance credit | Per-card and overall monthly outstanding can be negative for advance payments; credit is consumed in the next statement cycle to move values back toward zero. |
@@ -34,9 +34,12 @@
 | **Users** | List / Create / Edit / Delete | **Admin only.** User CRUD; sidebar and routes restricted for non-admin. |
 | **Cards** | List / Create / Edit / Delete | **Admin:** Full CRUD and card grid. **User:** View-only; no card tiles; only “Transactions & statements” (list of cards with View transactions and Statement links). |
 | **Cards** | Monthly drill-down modal behavior | From card tile or view icon: opens monthly obligations modal; `Back to cards` exits cleanly (no blank intermediate modal state). |
+| **Cards** | Transaction table columns | Transaction drill-down shows five columns: **Date**, **Description**, **Charge** (original due amount), **Balance** (remaining owed — ₱0.00 when paid), **Status** (green "Paid" / amber "Unpaid" badge). Previously paid items showed ₱0.00 with no status indicator, making them look removed. |
+| **Cards** | Pay all for selected month | "Pay all" button pays every unpaid item in the selected statement month in sequence. All errors are collected (non–fail-fast) and shown together after the batch completes. Uses `due_amount` (not the remaining balance) as `amount_paid`. |
 | **Expenses** | List / Create / Edit / Delete | **Admin only.** Expense CRUD; toggle paid month for installments. Non-admin cannot access sidebar link or routes (403). |
 | **Expenses** | Toggle paid month (installment) | Record or remove payment for a specific installment month (admin only). |
 | **Expenses** | Exact installment month payment | Installment month payment amount is fixed to the computed due amount (exact match required). UI disables manual edit for standard month payments and shows success/error validation messages. |
+| **Expenses** | This month's payment metric | Summary bar below the expenses table shows the current calendar month's total unpaid balance inline beside the other totals (total to pay, total paid, outstanding balance). Colored amber when >0, green when fully paid. Installment items are resolved per-month from `month_requirements`; full-payment items count only if unpaid and dated this month. |
 | **Settings** | Card types / Expense types / Payment terms | **Admin only.** CRUD for card types, expense types, and payment terms. |
 | **Settings** | Profile | All roles. Name and password editable; email read-only. |
 | **Settings** | Favicon / Logo | **Admin only.** Upload a .ico file (Settings → Profile) to set the browser tab icon and sidebar logo. One file used for both. |
@@ -144,7 +147,7 @@ See **[docs/MIGRATION.md](docs/MIGRATION.md)** for the full ordered list and des
 1. Copy `.env.example` to `.env`; set `APP_URL`, `DB_*`; run `php artisan key:generate`.
 2. `composer install`, `npm install`, `npm run build`.
 3. Run migrations: `php artisan migrate` (see [docs/MIGRATION.md](docs/MIGRATION.md)).
-4. (Optional) Set `SESSION_LIFETIME=5` in `.env` for idle timeout in minutes (default 5; auto-logout after inactivity for both admin and user).
+4. (Optional) Set `SESSION_LIFETIME` in `.env` to control idle timeout in minutes (default **120**; auto-logout after inactivity for both admin and user). Also set `SESSION_ENCRYPT=true` to encrypt session data at rest.
 5. (Optional) For production over HTTPS: set `SESSION_SECURE_COOKIE=true` and `SESSION_SAME_SITE=lax` in `.env`.
 6. (Optional) Seed reference data: `php artisan db:seed` or specific seeders (e.g. CardType, ExpenseType, PaymentTerm — see [docs/MIGRATION.md](docs/MIGRATION.md)).
 7. **Admin user:** Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env`, then run `php artisan config:clear` and `php artisan db:seed --class=AdminUserSeeder`. (Or create a user with `role = 'admin'` in the database; the admin middleware treats null/missing `role` as admin for legacy rows.)

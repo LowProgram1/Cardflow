@@ -657,6 +657,42 @@ export default function ExpensesIndex() {
         return { totalAmountPaid, totalOutstanding, totalToPay };
     }, [localExpenses]);
 
+    const thisMonthPayment = useMemo(() => {
+        const now = new Date();
+        const curYear = now.getFullYear();
+        const curMonth = now.getMonth() + 1;
+        let total = 0;
+
+        (localExpenses ?? []).forEach((row) => {
+            if (!row.transaction_date) return;
+            const [baseYear, baseMonth] = row.transaction_date.split('-').map(Number);
+            if (!baseYear || !baseMonth) return;
+
+            if (row.payment_type === 'installment') {
+                const termMonths = row.payment_term_months ?? 0;
+                if (termMonths <= 0) return;
+                const reqs = Array.isArray(row.month_requirements) ? row.month_requirements : [];
+                for (let i = 0; i < termMonths; i++) {
+                    const absMonth = baseMonth + i;
+                    const calYear  = baseYear + Math.floor((absMonth - 1) / 12);
+                    const calMonth = ((absMonth - 1) % 12) + 1;
+                    if (calYear === curYear && calMonth === curMonth) {
+                        const req = reqs.find((r) => Number(r.month) === i + 1);
+                        total += req ? Number(req.balance ?? row.monthly_amortization ?? 0) : Number(row.monthly_amortization ?? 0);
+                    }
+                }
+            } else {
+                const [txYear, txMonth] = row.transaction_date.split('-').map(Number);
+                if (txYear === curYear && txMonth === curMonth) {
+                    const isPaid = (row.paid_months ?? []).includes(1);
+                    if (!isPaid) total += Number(row.amount ?? 0);
+                }
+            }
+        });
+
+        return round2(total);
+    }, [localExpenses]);
+
     const handleFullPaymentPaidClick = async (row) => {
         const csrfToken = props?.csrf_token ?? '';
         try {
@@ -861,6 +897,12 @@ export default function ExpensesIndex() {
                             role="row"
                             aria-label="Summary totals"
                         >
+                            <span className="font-semibold text-[#1E3A8A]">
+                                This month's payment:{' '}
+                                <span className={`font-bold ${thisMonthPayment > 0 ? 'text-amber-700' : 'text-emerald-600'}`}>
+                                    ₱{thisMonthPayment.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                            </span>
                             <span className="font-semibold text-[#1E3A8A]">
                                 Total to pay:{' '}
                                 <span className="font-bold">

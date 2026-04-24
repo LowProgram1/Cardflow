@@ -129,13 +129,20 @@ class CardController extends Controller
 
         $items = $expenses->map(function ($expense) {
             if (is_array($expense)) {
+                $balance = (float) ($expense['amount'] ?? 0);
+                $dueAmount = (float) ($expense['due_amount'] ?? $balance);
                 return [
                     'id' => $expense['id'] ?? null,
                     'expense_id' => $expense['expense_id'] ?? null,
                     'month_number' => $expense['month_number'] ?? null,
                     'description' => $expense['description'] ?? null,
-                    'amount' => (float) ($expense['amount'] ?? 0),
-                    'formatted_amount' => $expense['formatted_amount'] ?? CurrencyHelper::formatCurrency((float) ($expense['amount'] ?? 0)),
+                    'amount' => $balance,
+                    'formatted_amount' => $expense['formatted_amount'] ?? CurrencyHelper::formatCurrency($balance),
+                    'due_amount' => $dueAmount,
+                    'formatted_due_amount' => $expense['formatted_due_amount'] ?? CurrencyHelper::formatCurrency($dueAmount),
+                    'paid_amount' => (float) ($expense['paid_amount'] ?? 0),
+                    'formatted_paid_amount' => $expense['formatted_paid_amount'] ?? CurrencyHelper::formatCurrency((float) ($expense['paid_amount'] ?? 0)),
+                    'status' => $expense['status'] ?? ($balance <= 0 ? 'paid' : 'unpaid'),
                     'type' => $expense['type'] ?? null,
                     'transaction_date' => $expense['transaction_date'] ?? null,
                     'expense_type_name' => $expense['expense_type_name'] ?? null,
@@ -143,13 +150,20 @@ class CardController extends Controller
                 ];
             }
 
+            $amount = (float) $expense->amount;
+            $isPaid = in_array(1, $expense->paid_months ?? [], true);
             return [
                 'id' => $expense->id,
                 'expense_id' => $expense->id,
                 'month_number' => null,
                 'description' => $expense->description,
-                'amount' => (float) $expense->amount,
-                'formatted_amount' => CurrencyHelper::formatCurrency((float) $expense->amount),
+                'amount' => $amount,
+                'formatted_amount' => CurrencyHelper::formatCurrency($amount),
+                'due_amount' => $amount,
+                'formatted_due_amount' => CurrencyHelper::formatCurrency($amount),
+                'paid_amount' => $isPaid ? $amount : 0.0,
+                'formatted_paid_amount' => CurrencyHelper::formatCurrency($isPaid ? $amount : 0.0),
+                'status' => $isPaid ? 'paid' : 'unpaid',
                 'type' => $expense->type,
                 'transaction_date' => $expense->transaction_date?->format('Y-m-d'),
                 'expense_type_name' => $expense->expenseType?->name,

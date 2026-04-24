@@ -26,6 +26,8 @@ use App\Http\Controllers\StatementController;
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'show'])->name('login');
     Route::post('/login', [LoginController::class, 'store'])->name('login.store');
+    // Clients that follow redirects while keeping PUT/PATCH hit /login → 405 without this.
+    Route::match(['put', 'patch', 'delete'], '/login', fn () => redirect()->route('login', [], 303))->name('login.method_fallback');
     Route::get('/forgot-password', [ForgotPasswordController::class, 'show'])->name('password.request');
     Route::post('/forgot-password', [ForgotPasswordController::class, 'store'])->name('password.email')->middleware('throttle:auth');
     Route::get('/reset-password/{token}', [ResetPasswordController::class, 'show'])->name('password.reset');

@@ -39,8 +39,13 @@ Laravel’s CSRF middleware is enabled for all web routes. All state-changing re
 ### 6. Session and cookies
 
 - Session driver is configurable (e.g. database).
-- **Production recommendation:** Set `SESSION_SECURE_COOKIE=true` and `SESSION_ENCRYPT=true` when using HTTPS.
-- Cookies are `http_only` and `same_site=lax` by default to limit XSS and CSRF impact.
+- `SESSION_ENCRYPT=true` encrypts session payload at rest (enabled by default in this project).
+- `SESSION_LIFETIME` controls idle timeout in minutes; default is **120** (auto-logout after inactivity).
+- `SESSION_SAME_SITE=lax` is set to limit cross-site request exposure.
+- **Production:** Also set `SESSION_SECURE_COOKIE=true` (requires HTTPS).
+- Cookies are `http_only` by default to limit XSS impact.
+
+> **Note:** Changing `SESSION_ENCRYPT` from false → true invalidates all existing sessions. Flush the sessions table (`DELETE FROM sessions`) after toggling this setting.
 
 ### 7. Password policy
 
@@ -56,7 +61,7 @@ Default password rules (in `AppServiceProvider`): minimum 12 characters, letters
 
 - [ ] Set `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://yourdomain.com`.
 - [ ] Use HTTPS only; ensure reverse proxy sets `X-Forwarded-Proto` so Laravel sees secure requests.
-- [ ] Set `SESSION_SECURE_COOKIE=true` and `SESSION_ENCRYPT=true`.
+- [ ] Set `SESSION_SECURE_COOKIE=true` (HTTPS only). `SESSION_ENCRYPT=true` is already on by default.
 - [ ] Set `ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com` (no spaces).
 - [ ] Keep `APP_KEY` secret and never change it after encrypting data (e.g. card fields).
 - [ ] Run `php artisan config:cache` and `php artisan route:cache` in production.
